@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My TTS Reader</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 0 15px; background: #f9f9f9; }
+        h1 { color: #333; }
+        textarea { width: 100%; box-sizing: border-box; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+        label { display: block; margin: 15px 0 5px; font-weight: bold; }
+        input[type="range"] { width: 100%; }
+        select, input[type="text"], input[type="password"] { padding: 8px; width: 100%; max-width: 400px; box-sizing: border-box; }
+        button { padding: 10px 18px; font-size: 16px; margin: 10px 5px 10px 0; cursor: pointer; border: none; border-radius: 6px; background: #0078d4; color: white; }
+        button:hover { background: #005a9e; }
+        #pauseBtn { background: #6c757d; }
+        #status { margin-top: 15px; color: #555; }
+        details { margin: 15px 0; background: #fff; padding: 10px; border-radius: 6px; border: 1px solid #ddd; }
+        #speedValue { font-weight: bold; color: #0078d4; }
+        audio { width: 100%; margin-top: 15px; }
+        .small { font-size: 14px; color: #666; }
+    </style>
+</head>
+<body>
+
+<h1>🎧 My Personal TTS Reader</h1>
+
+<details>
+    <summary><strong>⚙️ API Settings (click once to configure)</strong></summary>
+    <label>Cloudflare Worker URL:</label>
+    <input type="text" id="workerUrl" placeholder="https://my-edge-tts.your-subdomain.workers.dev">
+    <label>API Key (the secret you set in Cloudflare):</label>
+    <input type="password" id="apiKey" placeholder="sk-my-tts-12345">
+    <button id="saveSettings">Save Settings</button>
+    <p class="small">Settings are saved in your browser’s local storage. You only need to do this once per device.</p>
+</details>
+
+<label for="voiceSelect">Voice:</label>
+<select id="voiceSelect">
+    <option value="en-US-AriaNeural">Aria — US Female (natural)</option>
+    <option value="en-US-GuyNeural">Guy — US Male</option>
+    <option value="en-US-JennyNeural">Jenny — US Female</option>
+    <option value="en-GB-SoniaNeural">Sonia — UK Female</option>
+    <option value="en-GB-RyanNeural">Ryan — UK Male</option>
+    <option value="en-AU-NatashaNeural">Natasha — Australian Female</option>
+    <option value="en-CA-ClaraNeural">Clara — Canadian Female</option>
+    <option value="en-IN-NeerjaNeural">Neerja — Indian Female</option>
+</select>
+
+<label for="speedSlider">Speed: <span id="speedValue">1.00×</span></label>
+<input type="range" id="speedSlider" min="0.5" max="2.0" step="0.05" value="1.0">
+
+<button id="pauseBtn">⏸️ Insert Pause (1.5s)</button>
+
+<label for="inputText">Paste your AI chat / text below:</label>
+<textarea id="inputText" rows="14" placeholder="Paste your long text here. Tables will be summarised automatically, and images will be replaced with 'See image'."></textarea>
+
+<button id="generateBtn">🔊 Generate & Play</button>
+
+<audio id="audioPlayer" controls></audio>
+<div id="status"></div>
+
+<script>
+// ------------------------------------------------------------
+// 1. SETTINGS MANAGEMENT
+// ------------------------------------------------------------
+const workerUrlInput = document.getElementById('workerUrl');
+const apiKeyInput = document.getElementById('apiKey');
+
+// Load saved settings
+workerUrlInput.value = localStorage.getItem('ttsWorkerUrl') || '';
+apiKeyInput.value = localStorage.getItem('ttsApiKey') || '';
+
+document.getElementById('saveSettings').addEventListener('click', () => {
+    let url = workerUrlInput.value.trim().replace(/\/$/, ''); // remove trailing slash
+    const key = apiKeyInput.value.trim();
+    if (!url || !key) {
+        alert('Please enter both the Worker URL and the API Key.');
+        return;
+    }
+    localStorage.setItem('ttsWorkerUrl', url);
+    localStorage.setItem('ttsApiKey', key);
+    document.getElementById('status').textContent = '✅ Settings saved.';
+});
+
+// ------------------------------------------------------------
+// 2. SPEED SLIDER
+// ------------------------------------------------------------
+const speedSlider = document.getElementById('speedSlider');
+const speedValue = document.getElementById('speedValue');
+speedSlider.addEventListener('input', () => {
+    const val = parseFloat(speedSlider.value).toFixed(2);
+    speedValue.textContent = val + '×';
+});
+
+// ------------------------------------------------------------
+// 3. PAUSE BUTTON (inserts a real SSML break tag)
+// ------------------------------------------------------------
+document.getElementById('pauseBtn').addEventListener('click', () => {
+    const textarea = document.getElementById('inputText');
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const pauseTag = ' <break time="1.5s"/> ';
+    textarea.value = textarea.value.slice(0, start) + pauseTag + textarea.value.slice(end);
+    textarea.selectionStart = textarea.selectionEnd = start + pauseTag.length;
+    textarea.focus();
+});
+
+// ------------------------------------------------------------
+// 4. TEXT PREPROCESSOR (Tables + Images)
+// ------------------------------------------------------------
+function preprocessText(raw) {
+    let text = raw;
+
+    // Images: ![alt](url) → "See image" or alt text
+    text = text.replace(/!\[([^\]]*)\]\([^)]+\)/g, (match, alt) => {
+        return alt ? ` (Image: ${alt}) ` : ' See image. ';
+    });
+
+    // Tables: lines starting with |
+    const lines = text.split('\n');
+    const out = [];
+    let inTable = false;
+    let headers = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('|')) {
+            if (!inTable) {
+                inTable = true;
+                // Extract header cells, ignoring empty and separator
+                const cells = line.split('|').map(c => c.trim()).filter(c => c !== '' && !c.includes('---'));
+                headers = cells;
+                // Skip separator line if present
+                if (i + 1 < lines.length && lines[i + 1].includes('---')) i++;
+            }
+            // Do not output table rows
+        } else {
+            if (inTable) {
+                // End of table: output a short summary
+                out.push(` Here is a table with columns: ${headers.join(', ')}. Please refer to the table for details. `);
+                inTable = false;
+                headers = [];
+            }
+            out.push(line);
+        }
+    }
+    if (inTable) {
+        out.push(` Here is a table with columns: ${headers.join(', ')}. Please refer to the table for details. `);
+    }
+
+    return out.join('\n');
+}
+
+// ------------------------------------------------------------
+// 5. GENERATE SPEECH
+// ------------------------------------------------------------
+document.getElementById('generateBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('status');
+    const audioEl = document.getElementById('audioPlayer');
+
+    // Read settings
+    const workerUrl = localStorage.getItem('ttsWorkerUrl');
+    const apiKey = localStorage.getItem('ttsApiKey');
+
+    if (!workerUrl || !apiKey) {
+        statusEl.textContent = '⚠️ Please open “API Settings” above and save your Worker URL and API Key first.';
+        return;
+    }
+
+    const rawText = document.getElementById('inputText').value.trim();
+    if (!rawText) {
+        statusEl.textContent = '⚠️ Please paste some text.';
+        return;
+    }
+
+    const processedText = preprocessText(rawText);
+    const voice = document.getElementById('voiceSelect').value;
+    const speed = parseFloat(speedSlider.value);
+
+    statusEl.textContent = '⏳ Generating audio… (first request may take a few seconds)';
+
+    try {
+        const response = await fetch(`${workerUrl}/v1/audio/speech`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                input: processedText,
+                voice: voice,
+                speed: speed,
+                stream: false   // set true if you want faster start on very long text
+            })
+        });
+
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(`Worker returned ${response.status}: ${err}`);
+        }
+
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        audioEl.src = audioUrl;
+        audioEl.play();
+
+        statusEl.textContent = '✅ Audio ready. Use the player controls to listen.';
+    } catch (err) {
+        statusEl.textContent = '❌ Error: ' + err.message;
+        console.error(err);
+    }
+});
+</script>
+
+</body>
+</html>
