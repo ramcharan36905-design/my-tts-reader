@@ -3,182 +3,329 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My TTS Reader</title>
+    <title>Pro TTS Reader</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 0 15px; background: #f9f9f9; }
-        h1 { color: #333; }
-        textarea { width: 100%; box-sizing: border-box; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
-        label { display: block; margin: 15px 0 5px; font-weight: bold; }
-        input[type="range"] { width: 100%; }
-        select, input[type="text"], input[type="password"] { padding: 8px; width: 100%; max-width: 400px; box-sizing: border-box; }
-        button { padding: 10px 18px; font-size: 16px; margin: 10px 5px 10px 0; cursor: pointer; border: none; border-radius: 6px; background: #0078d4; color: white; }
-        button:hover { background: #005a9e; }
-        #pauseBtn { background: #6c757d; }
-        #status { margin-top: 15px; color: #555; }
-        details { margin: 15px 0; background: #fff; padding: 10px; border-radius: 6px; border: 1px solid #ddd; }
-        #speedValue { font-weight: bold; color: #0078d4; }
-        audio { width: 100%; margin-top: 15px; }
-        .small { font-size: 14px; color: #666; }
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --highlight: rgba(250, 204, 21, 0.4); /* Transparent Yellow */
+        }
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            max-width: 900px; 
+            margin: 0 auto; 
+            padding: 20px 15px; 
+            background-color: var(--bg-color); 
+            color: var(--text-main);
+        }
+        h1 { font-weight: 600; font-size: 24px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;}
+        .panel { background: var(--panel-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; }
+        textarea { 
+            width: 100%; box-sizing: border-box; font-size: 16px; padding: 15px; 
+            border: 1px solid #334155; border-radius: 8px; background: #0f172a; 
+            color: var(--text-main); resize: vertical; min-height: 150px;
+        }
+        textarea:focus, input:focus, select:focus { outline: 2px solid var(--accent); border-color: transparent; }
+        label { display: block; margin: 15px 0 8px; font-weight: 500; color: var(--text-muted); font-size: 14px; }
+        select, input[type="text"], input[type="password"], input[type="number"] { 
+            padding: 10px; width: 100%; box-sizing: border-box; 
+            background: #0f172a; color: white; border: 1px solid #334155; border-radius: 8px;
+        }
+        input[type="number"] { width: 70px; text-align: center; }
+        button { 
+            padding: 12px 24px; font-size: 16px; font-weight: 600; cursor: pointer; 
+            border: none; border-radius: 8px; background: var(--accent); color: white; 
+            transition: background 0.2s, transform 0.1s;
+        }
+        button:hover { background: var(--accent-hover); }
+        button:active { transform: scale(0.98); }
+        #generateBtn { width: 100%; margin-top: 15px; font-size: 18px; padding: 15px; }
+        
+        /* Audio Player & Controls */
+        .audio-container { display: none; margin-top: 20px; }
+        .audio-controls { display: flex; align-items: center; gap: 15px; margin-top: 15px; flex-wrap: wrap; }
+        .skip-group { display: flex; align-items: center; gap: 5px; background: #334155; padding: 5px 10px; border-radius: 8px; }
+        .skip-btn { background: transparent; padding: 5px 10px; font-size: 14px; }
+        .skip-btn:hover { background: #475569; }
+        audio { width: 100%; margin-top: 10px; border-radius: 8px; }
+        
+        /* Speed Slider */
+        input[type="range"] { -webkit-appearance: none; width: 100%; height: 6px; background: #334155; border-radius: 5px; outline: none; margin-top: 5px;}
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+        .speed-container { display: flex; align-items: center; gap: 15px; margin-top: 10px; flex-grow: 1;}
+        .speed-display { font-weight: bold; color: var(--accent); min-width: 50px; text-align: right;}
+        
+        /* Reading Display / Highlighter */
+        #readingContainer {
+            display: none;
+            max-height: 300px;
+            overflow-y: auto;
+            background: #0f172a;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            line-height: 1.8;
+            font-size: 18px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+        .word { transition: background-color 0.1s; border-radius: 4px; padding: 0 2px; }
+        .word.active { background-color: var(--highlight); color: #fff; }
+
+        details { background: #0f172a; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #334155; }
+        summary { cursor: pointer; font-weight: 500; color: var(--text-muted); }
+        summary:hover { color: var(--text-main); }
+        .status { font-size: 14px; margin-top: 10px; color: #10b981; }
+        .error { color: #ef4444; }
     </style>
 </head>
 <body>
 
-<h1>🎧 My Personal TTS Reader</h1>
+    <h1>🎧 Pro TTS Reader</h1>
 
-<details>
-    <summary><strong>⚙️ API Settings (click once to configure)</strong></summary>
-    <label>Cloudflare Worker URL:</label>
-    <input type="text" id="workerUrl" placeholder="https://my-edge-tts.your-subdomain.workers.dev">
-    <label>API Key (the secret you set in Cloudflare):</label>
-    <input type="password" id="apiKey" placeholder="sk-my-tts-12345">
-    <button id="saveSettings">Save Settings</button>
-    <p class="small">Settings are saved in your browser’s local storage. You only need to do this once per device.</p>
-</details>
+    <details>
+        <summary>⚙️ API Settings (Click to configure)</summary>
+        <div style="margin-top: 15px;">
+            <label>Cloudflare Worker URL:</label>
+            <input type="text" id="workerUrl" placeholder="https://my-edge-tts.your-subdomain.workers.dev">
+            <label>API Key:</label>
+            <input type="password" id="apiKey" placeholder="sk-my-tts-12345">
+            <button id="saveSettings" style="margin-top: 15px; font-size: 14px; padding: 8px 16px;">Save Settings</button>
+        </div>
+    </details>
 
-<label for="voiceSelect">Voice:</label>
-<select id="voiceSelect">
-    <option value="en-US-AriaNeural">Aria — US Female (natural)</option>
-    <option value="en-US-GuyNeural">Guy — US Male</option>
-    <option value="en-US-JennyNeural">Jenny — US Female</option>
-    <option value="en-GB-SoniaNeural">Sonia — UK Female</option>
-    <option value="en-GB-RyanNeural">Ryan — UK Male</option>
-    <option value="en-AU-NatashaNeural">Natasha — Australian Female</option>
-    <option value="en-CA-ClaraNeural">Clara — Canadian Female</option>
-    <option value="en-IN-NeerjaNeural">Neerja — Indian Female</option>
-</select>
+    <div class="panel">
+        <label>Select Voice (Microsoft Neural):</label>
+        <select id="voiceSelect">
+            <optgroup label="🇺🇸 US English">
+                <option value="en-US-AriaNeural">Aria (Female, Natural)</option>
+                <option value="en-US-GuyNeural">Guy (Male, Natural)</option>
+                <option value="en-US-JennyNeural">Jenny (Female, Conversational)</option>
+                <option value="en-US-ChristopherNeural">Christopher (Male, Deep)</option>
+                <option value="en-US-EricNeural">Eric (Male)</option>
+                <option value="en-US-MichelleNeural">Michelle (Female)</option>
+            </optgroup>
+            <optgroup label="🇬🇧 UK English">
+                <option value="en-GB-SoniaNeural">Sonia (Female)</option>
+                <option value="en-GB-RyanNeural">Ryan (Male)</option>
+                <option value="en-GB-LibbyNeural">Libby (Female)</option>
+            </optgroup>
+            <optgroup label="🇮🇳 Indian English">
+                <option value="en-IN-NeerjaNeural">Neerja (Female)</option>
+                <option value="en-IN-PrabhatNeural">Prabhat (Male)</option>
+            </optgroup>
+        </select>
 
-<label for="speedSlider">Speed: <span id="speedValue">1.00×</span></label>
-<input type="range" id="speedSlider" min="0.5" max="2.0" step="0.05" value="1.0">
+        <label for="inputText" style="margin-top: 20px;">Paste your AI chat / text below:</label>
+        <textarea id="inputText" placeholder="Paste your long text here. Tables will be summarised automatically, and images will be replaced with 'See image'."></textarea>
 
-<button id="pauseBtn">⏸️ Insert Pause (1.5s)</button>
+        <button id="generateBtn">🔊 Generate Audio</button>
+        <div id="status" class="status"></div>
+    </div>
 
-<label for="inputText">Paste your AI chat / text below:</label>
-<textarea id="inputText" rows="14" placeholder="Paste your long text here. Tables will be summarised automatically, and images will be replaced with 'See image'."></textarea>
+    <!-- Custom Audio Player (Hidden initially) -->
+    <div id="playerContainer" class="panel audio-container">
+        <audio id="audioPlayer" controls></audio>
+        
+        <div class="audio-controls">
+            <!-- Custom Skip Group -->
+            <div class="skip-group">
+                <button class="skip-btn" id="skipBack">⏪ -</button>
+                <input type="number" id="skipSeconds" value="10" min="1" max="60" style="padding: 5px; width: 50px; font-size: 14px;">
+                <button class="skip-btn" id="skipForward">⏩ +</button>
+                <span style="font-size: 14px; color: var(--text-muted);">sec</span>
+            </div>
 
-<button id="generateBtn">🔊 Generate & Play</button>
+            <!-- Instant Speed Control -->
+            <div class="speed-container">
+                <span style="font-size: 14px; font-weight: 500;">Speed:</span>
+                <input type="range" id="speedSlider" min="0.5" max="3.0" step="0.05" value="1.0">
+                <span id="speedValue" class="speed-display">1.00×</span>
+            </div>
+        </div>
 
-<audio id="audioPlayer" controls></audio>
-<div id="status"></div>
+        <!-- Karaoke Highlighter Container -->
+        <div id="readingContainer"></div>
+    </div>
 
 <script>
-// ------------------------------------------------------------
-// 1. SETTINGS MANAGEMENT
-// ------------------------------------------------------------
+// --- Settings Management ---
 const workerUrlInput = document.getElementById('workerUrl');
 const apiKeyInput = document.getElementById('apiKey');
-
-// Load saved settings
 workerUrlInput.value = localStorage.getItem('ttsWorkerUrl') || '';
 apiKeyInput.value = localStorage.getItem('ttsApiKey') || '';
 
 document.getElementById('saveSettings').addEventListener('click', () => {
-    let url = workerUrlInput.value.trim().replace(/\/$/, ''); // remove trailing slash
+    let url = workerUrlInput.value.trim().replace(/\/$/, '');
     const key = apiKeyInput.value.trim();
-    if (!url || !key) {
-        alert('Please enter both the Worker URL and the API Key.');
-        return;
-    }
+    if (!url || !key) return alert('Please enter both URL and Key.');
     localStorage.setItem('ttsWorkerUrl', url);
     localStorage.setItem('ttsApiKey', key);
-    document.getElementById('status').textContent = '✅ Settings saved.';
+    document.getElementById('status').textContent = '✅ Settings saved successfully.';
 });
 
-// ------------------------------------------------------------
-// 2. SPEED SLIDER
-// ------------------------------------------------------------
+// --- Audio Player Variables ---
+const audioPlayer = document.getElementById('audioPlayer');
 const speedSlider = document.getElementById('speedSlider');
 const speedValue = document.getElementById('speedValue');
+const playerContainer = document.getElementById('playerContainer');
+const readingContainer = document.getElementById('readingContainer');
+
+// --- Instant Speed Control ---
 speedSlider.addEventListener('input', () => {
-    const val = parseFloat(speedSlider.value).toFixed(2);
-    speedValue.textContent = val + '×';
+    const speed = parseFloat(speedSlider.value);
+    speedValue.textContent = speed.toFixed(2) + '×';
+    audioPlayer.playbackRate = speed;
 });
 
-// ------------------------------------------------------------
-// 3. PAUSE BUTTON (inserts a real SSML break tag)
-// ------------------------------------------------------------
-document.getElementById('pauseBtn').addEventListener('click', () => {
-    const textarea = document.getElementById('inputText');
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const pauseTag = ' <break time="1.5s"/> ';
-    textarea.value = textarea.value.slice(0, start) + pauseTag + textarea.value.slice(end);
-    textarea.selectionStart = textarea.selectionEnd = start + pauseTag.length;
-    textarea.focus();
+// Preserve pitch (no chipmunk voice)
+audioPlayer.preservesPitch = true;
+audioPlayer.mozPreservesPitch = true;
+audioPlayer.webkitPreservesPitch = true;
+
+// --- Custom Skip Logic ---
+document.getElementById('skipBack').addEventListener('click', () => {
+    const skipAmount = parseFloat(document.getElementById('skipSeconds').value) || 10;
+    audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - skipAmount);
 });
 
-// ------------------------------------------------------------
-// 4. TEXT PREPROCESSOR (Tables + Images)
-// ------------------------------------------------------------
+document.getElementById('skipForward').addEventListener('click', () => {
+    const skipAmount = parseFloat(document.getElementById('skipSeconds').value) || 10;
+    audioPlayer.currentTime = Math.min(audioPlayer.duration || 999999, audioPlayer.currentTime + skipAmount);
+});
+
+// --- Karaoke Highlighter Logic ---
+let wordSpans = [];
+let totalChars = 0;
+let animationFrameId;
+
+function renderTextForHighlighting(text) {
+    readingContainer.innerHTML = '';
+    wordSpans = [];
+    
+    // Split by spaces but keep punctuation attached to the word
+    const words = text.split(/(\s+)/); 
+    let currentCharIndex = 0;
+    
+    words.forEach(word => {
+        if (word.trim().length === 0) {
+            readingContainer.appendChild(document.createTextNode(word));
+            currentCharIndex += word.length;
+        } else {
+            const span = document.createElement('span');
+            span.className = 'word';
+            span.textContent = word;
+            readingContainer.appendChild(span);
+            
+            wordSpans.push({
+                start: currentCharIndex,
+                end: currentCharIndex + word.length,
+                el: span
+            });
+            
+            currentCharIndex += word.length;
+        }
+    });
+    totalChars = currentCharIndex;
+}
+
+function updateHighlight() {
+    if (!audioPlayer.paused && audioPlayer.duration) {
+        // Calculate approximate character position based on audio progress
+        const progress = audioPlayer.currentTime / audioPlayer.duration;
+        const currentChar = progress * totalChars;
+        
+        let activeSpan = null;
+        
+        for (let i = 0; i < wordSpans.length; i++) {
+            const w = wordSpans[i];
+            if (currentChar >= w.start && currentChar < w.end) {
+                if (!w.el.classList.contains('active')) {
+                    w.el.classList.add('active');
+                    activeSpan = w.el;
+                }
+                break;
+            } else {
+                w.el.classList.remove('active');
+            }
+        }
+
+        // Auto-scroll to keep active word in view
+        if (activeSpan) {
+            const containerRect = readingContainer.getBoundingClientRect();
+            const spanRect = activeSpan.getBoundingClientRect();
+            
+            // If span is below or above the visible container, scroll
+            if (spanRect.bottom > containerRect.bottom - 20 || spanRect.top < containerRect.top + 20) {
+                activeSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    }
+    animationFrameId = requestAnimationFrame(updateHighlight);
+}
+
+audioPlayer.addEventListener('play', () => {
+    cancelAnimationFrame(animationFrameId);
+    updateHighlight();
+});
+
+audioPlayer.addEventListener('pause', () => {
+    cancelAnimationFrame(animationFrameId);
+});
+
+audioPlayer.addEventListener('seeked', () => {
+    // Clear all active highlights on seek
+    wordSpans.forEach(w => w.el.classList.remove('active'));
+});
+
+// --- Text Preprocessor ---
 function preprocessText(raw) {
     let text = raw;
-
-    // Images: ![alt](url) → "See image" or alt text
-    text = text.replace(/!\[([^\]]*)\]\([^)]+\)/g, (match, alt) => {
-        return alt ? ` (Image: ${alt}) ` : ' See image. ';
-    });
-
-    // Tables: lines starting with |
+    text = text.replace(/!\[([^\]]*)\]\([^)]+\)/g, (match, alt) => alt ? ` (Image: ${alt}) ` : ' See image. ');
     const lines = text.split('\n');
     const out = [];
     let inTable = false;
     let headers = [];
-
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
         if (line.startsWith('|')) {
             if (!inTable) {
                 inTable = true;
-                // Extract header cells, ignoring empty and separator
                 const cells = line.split('|').map(c => c.trim()).filter(c => c !== '' && !c.includes('---'));
                 headers = cells;
-                // Skip separator line if present
                 if (i + 1 < lines.length && lines[i + 1].includes('---')) i++;
             }
-            // Do not output table rows
         } else {
             if (inTable) {
-                // End of table: output a short summary
-                out.push(` Here is a table with columns: ${headers.join(', ')}. Please refer to the table for details. `);
-                inTable = false;
-                headers = [];
+                out.push(` Here is a table with columns: ${headers.join(', ')}. Please refer to the table. `);
+                inTable = false; headers = [];
             }
             out.push(line);
         }
     }
-    if (inTable) {
-        out.push(` Here is a table with columns: ${headers.join(', ')}. Please refer to the table for details. `);
-    }
-
+    if (inTable) out.push(` Here is a table with columns: ${headers.join(', ')}. Please refer to the table. `);
     return out.join('\n');
 }
 
-// ------------------------------------------------------------
-// 5. GENERATE SPEECH
-// ------------------------------------------------------------
+// --- Generate Speech ---
 document.getElementById('generateBtn').addEventListener('click', async () => {
     const statusEl = document.getElementById('status');
-    const audioEl = document.getElementById('audioPlayer');
-
-    // Read settings
     const workerUrl = localStorage.getItem('ttsWorkerUrl');
     const apiKey = localStorage.getItem('ttsApiKey');
 
-    if (!workerUrl || !apiKey) {
-        statusEl.textContent = '⚠️ Please open “API Settings” above and save your Worker URL and API Key first.';
-        return;
-    }
-
+    if (!workerUrl || !apiKey) return (statusEl.innerHTML = '<span class="error">⚠️ Please save your API Settings first.</span>');
     const rawText = document.getElementById('inputText').value.trim();
-    if (!rawText) {
-        statusEl.textContent = '⚠️ Please paste some text.';
-        return;
-    }
+    if (!rawText) return (statusEl.innerHTML = '<span class="error">⚠️ Please paste some text.</span>');
 
     const processedText = preprocessText(rawText);
     const voice = document.getElementById('voiceSelect').value;
-    const speed = parseFloat(speedSlider.value);
-
-    statusEl.textContent = '⏳ Generating audio… (first request may take a few seconds)';
+    
+    statusEl.textContent = '⏳ Generating audio... (This may take a few seconds)';
+    playerContainer.style.display = 'none'; // Hide player while loading
 
     try {
         const response = await fetch(`${workerUrl}/v1/audio/speech`, {
@@ -190,28 +337,29 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
             body: JSON.stringify({
                 input: processedText,
                 voice: voice,
-                speed: speed,
-                stream: false   // set true if you want faster start on very long text
+                speed: 1.0, // Always generate at 1.0x
+                stream: false
             })
         });
 
-        if (!response.ok) {
-            const err = await response.text();
-            throw new Error(`Worker returned ${response.status}: ${err}`);
-        }
-
+        if (!response.ok) throw new Error(`Worker returned ${response.status}`);
         const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        audioEl.src = audioUrl;
-        audioEl.play();
-
-        statusEl.textContent = '✅ Audio ready. Use the player controls to listen.';
+        
+        audioPlayer.src = URL.createObjectURL(audioBlob);
+        
+        // Prepare the Highlighter Text
+        renderTextForHighlighting(processedText);
+        
+        playerContainer.style.display = 'block';
+        readingContainer.style.display = 'block';
+        audioPlayer.playbackRate = parseFloat(speedSlider.value);
+        
+        audioPlayer.play();
+        statusEl.textContent = '✅ Audio ready! Use the controls below.';
     } catch (err) {
-        statusEl.textContent = '❌ Error: ' + err.message;
-        console.error(err);
+        statusEl.innerHTML = `<span class="error">❌ Error: ${err.message}</span>`;
     }
 });
 </script>
-
 </body>
 </html>
