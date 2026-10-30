@@ -27,7 +27,7 @@
         textarea { 
             width: 100%; box-sizing: border-box; font-size: 16px; padding: 15px; 
             border: 1px solid #334155; border-radius: 8px; background: #0f172a; 
-            color: var(--text-main); resize: vertical; min-height: 150px;
+            color: var(--text-main); resize: vertical; min-height: 120px;
         }
         textarea:focus, input:focus, select:focus { outline: 2px solid var(--accent); border-color: transparent; }
         label { display: block; margin: 15px 0 8px; font-weight: 500; color: var(--text-muted); font-size: 14px; }
@@ -46,31 +46,31 @@
         #generateBtn { width: 100%; margin-top: 15px; font-size: 18px; padding: 15px; }
         
         /* Audio Player & Controls */
-        .audio-container { display: none; margin-top: 20px; }
-        .audio-controls { display: flex; align-items: center; gap: 15px; margin-top: 15px; flex-wrap: wrap; }
+        .audio-container { display: none; margin-top: 0px; }
+        .audio-controls { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
         .skip-group { display: flex; align-items: center; gap: 5px; background: #334155; padding: 5px 10px; border-radius: 8px; }
-        .skip-btn { background: transparent; padding: 5px 10px; font-size: 14px; }
+        .skip-btn { background: transparent; padding: 5px 10px; font-size: 14px; color: white;}
         .skip-btn:hover { background: #475569; }
-        audio { width: 100%; margin-top: 10px; border-radius: 8px; }
+        audio { width: 100%; margin-top: 5px; border-radius: 8px; }
         
-        /* Speed Slider */
+        /* Speed & Text Size Slider */
         input[type="range"] { -webkit-appearance: none; width: 100%; height: 6px; background: #334155; border-radius: 5px; outline: none; margin-top: 5px;}
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); cursor: pointer; }
-        .speed-container { display: flex; align-items: center; gap: 15px; margin-top: 10px; flex-grow: 1;}
-        .speed-display { font-weight: bold; color: var(--accent); min-width: 50px; text-align: right;}
+        .slider-group { display: flex; align-items: center; gap: 10px; flex-grow: 1;}
+        .slider-display { font-weight: bold; color: var(--accent); min-width: 50px; text-align: right; font-size: 14px;}
         
         /* Reading Display / Highlighter */
         #readingContainer {
             display: none;
-            max-height: 300px;
+            height: 60vh; /* Huge box - 60% of screen height */
+            min-height: 400px;
             overflow-y: auto;
             background: #0f172a;
             padding: 20px;
             border-radius: 8px;
             border: 1px solid #334155;
             line-height: 1.8;
-            font-size: 18px;
-            margin-top: 20px;
+            font-size: 20px; /* Default size, controlled by JS */
             white-space: pre-wrap;
         }
         .word { transition: background-color 0.1s; border-radius: 4px; padding: 0 2px; }
@@ -98,6 +98,39 @@
         </div>
     </details>
 
+    <!-- PLAYER & READER SECTION (Now at the top) -->
+    <div id="playerContainer" class="panel audio-container">
+        <audio id="audioPlayer" controls></audio>
+        
+        <div class="audio-controls" style="margin-top: 15px;">
+            <!-- Custom Skip Group -->
+            <div class="skip-group">
+                <button class="skip-btn" id="skipBack">⏪ -</button>
+                <input type="number" id="skipSeconds" value="10" min="1" max="60" style="padding: 5px; width: 50px; font-size: 14px; border: none;">
+                <button class="skip-btn" id="skipForward">⏩ +</button>
+                <span style="font-size: 14px; color: var(--text-muted);">sec</span>
+            </div>
+
+            <!-- Instant Speed Control -->
+            <div class="slider-group">
+                <span style="font-size: 14px; font-weight: 500;">Speed:</span>
+                <input type="range" id="speedSlider" min="0.5" max="3.0" step="0.05" value="1.0">
+                <span id="speedValue" class="slider-display">1.00×</span>
+            </div>
+
+            <!-- Text Size Control -->
+            <div style="display: flex; align-items: center; gap: 5px;">
+                <span style="font-size: 14px; font-weight: 500;">Text Size:</span>
+                <button class="skip-btn" id="textSizeDown" style="background: #334155; border-radius: 4px;">A-</button>
+                <button class="skip-btn" id="textSizeUp" style="background: #334155; border-radius: 4px;">A+</button>
+            </div>
+        </div>
+
+        <!-- Karaoke Highlighter Container (Huge & Top of Screen) -->
+        <div id="readingContainer"></div>
+    </div>
+
+    <!-- INPUT SECTION (Now at the bottom) -->
     <div class="panel">
         <label>Select Voice (Microsoft Neural):</label>
         <select id="voiceSelect">
@@ -127,31 +160,6 @@
         <div id="status" class="status"></div>
     </div>
 
-    <!-- Custom Audio Player (Hidden initially) -->
-    <div id="playerContainer" class="panel audio-container">
-        <audio id="audioPlayer" controls></audio>
-        
-        <div class="audio-controls">
-            <!-- Custom Skip Group -->
-            <div class="skip-group">
-                <button class="skip-btn" id="skipBack">⏪ -</button>
-                <input type="number" id="skipSeconds" value="10" min="1" max="60" style="padding: 5px; width: 50px; font-size: 14px;">
-                <button class="skip-btn" id="skipForward">⏩ +</button>
-                <span style="font-size: 14px; color: var(--text-muted);">sec</span>
-            </div>
-
-            <!-- Instant Speed Control -->
-            <div class="speed-container">
-                <span style="font-size: 14px; font-weight: 500;">Speed:</span>
-                <input type="range" id="speedSlider" min="0.5" max="3.0" step="0.05" value="1.0">
-                <span id="speedValue" class="speed-display">1.00×</span>
-            </div>
-        </div>
-
-        <!-- Karaoke Highlighter Container -->
-        <div id="readingContainer"></div>
-    </div>
-
 <script>
 // --- Settings Management ---
 const workerUrlInput = document.getElementById('workerUrl');
@@ -174,6 +182,7 @@ const speedSlider = document.getElementById('speedSlider');
 const speedValue = document.getElementById('speedValue');
 const playerContainer = document.getElementById('playerContainer');
 const readingContainer = document.getElementById('readingContainer');
+const inputPanel = document.getElementById('inputPanel');
 
 // --- Instant Speed Control ---
 speedSlider.addEventListener('input', () => {
@@ -182,7 +191,6 @@ speedSlider.addEventListener('input', () => {
     audioPlayer.playbackRate = speed;
 });
 
-// Preserve pitch (no chipmunk voice)
 audioPlayer.preservesPitch = true;
 audioPlayer.mozPreservesPitch = true;
 audioPlayer.webkitPreservesPitch = true;
@@ -198,6 +206,23 @@ document.getElementById('skipForward').addEventListener('click', () => {
     audioPlayer.currentTime = Math.min(audioPlayer.duration || 999999, audioPlayer.currentTime + skipAmount);
 });
 
+// --- Text Size Control ---
+let currentTextSize = parseInt(localStorage.getItem('ttsTextSize')) || 20; // Default 20px
+function applyTextSize() {
+    readingContainer.style.fontSize = currentTextSize + 'px';
+    localStorage.setItem('ttsTextSize', currentTextSize);
+}
+applyTextSize(); // Apply on load
+
+document.getElementById('textSizeUp').addEventListener('click', () => {
+    currentTextSize = Math.min(40, currentTextSize + 2);
+    applyTextSize();
+});
+document.getElementById('textSizeDown').addEventListener('click', () => {
+    currentTextSize = Math.max(12, currentTextSize - 2);
+    applyTextSize();
+});
+
 // --- Karaoke Highlighter Logic ---
 let wordSpans = [];
 let totalChars = 0;
@@ -207,7 +232,6 @@ function renderTextForHighlighting(text) {
     readingContainer.innerHTML = '';
     wordSpans = [];
     
-    // Split by spaces but keep punctuation attached to the word
     const words = text.split(/(\s+)/); 
     let currentCharIndex = 0;
     
@@ -235,7 +259,6 @@ function renderTextForHighlighting(text) {
 
 function updateHighlight() {
     if (!audioPlayer.paused && audioPlayer.duration) {
-        // Calculate approximate character position based on audio progress
         const progress = audioPlayer.currentTime / audioPlayer.duration;
         const currentChar = progress * totalChars;
         
@@ -254,13 +277,12 @@ function updateHighlight() {
             }
         }
 
-        // Auto-scroll to keep active word in view
         if (activeSpan) {
             const containerRect = readingContainer.getBoundingClientRect();
             const spanRect = activeSpan.getBoundingClientRect();
             
-            // If span is below or above the visible container, scroll
-            if (spanRect.bottom > containerRect.bottom - 20 || spanRect.top < containerRect.top + 20) {
+            // Auto-scroll
+            if (spanRect.bottom > containerRect.bottom - 30 || spanRect.top < containerRect.top + 30) {
                 activeSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
@@ -278,7 +300,6 @@ audioPlayer.addEventListener('pause', () => {
 });
 
 audioPlayer.addEventListener('seeked', () => {
-    // Clear all active highlights on seek
     wordSpans.forEach(w => w.el.classList.remove('active'));
 });
 
@@ -325,7 +346,7 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     const voice = document.getElementById('voiceSelect').value;
     
     statusEl.textContent = '⏳ Generating audio... (This may take a few seconds)';
-    playerContainer.style.display = 'none'; // Hide player while loading
+    playerContainer.style.display = 'none';
 
     try {
         const response = await fetch(`${workerUrl}/v1/audio/speech`, {
@@ -337,7 +358,7 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
             body: JSON.stringify({
                 input: processedText,
                 voice: voice,
-                speed: 1.0, // Always generate at 1.0x
+                speed: 1.0, // Always generate at 1.0x, adjust live via player
                 stream: false
             })
         });
@@ -347,15 +368,17 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
         
         audioPlayer.src = URL.createObjectURL(audioBlob);
         
-        // Prepare the Highlighter Text
         renderTextForHighlighting(processedText);
         
+        // Show player & reading box, scroll to top so they don't have to look down
         playerContainer.style.display = 'block';
         readingContainer.style.display = 'block';
-        audioPlayer.playbackRate = parseFloat(speedSlider.value);
         
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        
+        audioPlayer.playbackRate = parseFloat(speedSlider.value);
         audioPlayer.play();
-        statusEl.textContent = '✅ Audio ready! Use the controls below.';
+        statusEl.textContent = '✅ Audio ready!';
     } catch (err) {
         statusEl.innerHTML = `<span class="error">❌ Error: ${err.message}</span>`;
     }
