@@ -6,308 +6,264 @@
     <title>Pro TTS Reader</title>
     <style>
         :root {
-            --bg-color: #0f172a;
+            --bg-color: #0b1120;
             --panel-bg: #1e293b;
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
             --accent: #3b82f6;
-            --accent-hover: #2563eb;
-            --highlight: rgba(250, 204, 21, 0.4);
+            --highlight: rgba(250, 204, 21, 0.5);
         }
         body { 
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            margin: 0 auto; 
-            padding: 0; 
-            background-color: var(--bg-color); 
-            color: var(--text-main);
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-main);
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
         }
+
+        /* --- MAIN LAYOUT (Split Screen) --- */
+        .main-container { display: flex; flex: 1; overflow: hidden; position: relative; }
         
-        /* --- Sticky Top Controls --- */
-        .top-bar {
-            background: var(--panel-bg);
-            padding: 10px 20px;
-            border-bottom: 1px solid #334155;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 15px;
-            flex-wrap: wrap;
-            z-index: 100;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-        }
-        
-        .controls-group { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
-        
-        /* Compact Audio Player */
-        audio { height: 40px; border-radius: 20px; outline: none; }
-        audio::-webkit-media-controls-panel { background-color: #f1f5f9; }
-
-        /* Skip & Speed Controls */
-        .skip-group { display: flex; align-items: center; gap: 5px; background: #334155; padding: 2px 8px; border-radius: 6px; height: 36px; }
-        .skip-btn { background: transparent; border: none; padding: 4px 8px; font-size: 14px; color: white; cursor: pointer; border-radius: 4px;}
-        .skip-btn:hover { background: #475569; }
-        input[type="number"] { width: 45px; background: #0f172a; color: white; border: 1px solid #475569; border-radius: 4px; padding: 4px; text-align: center; }
-        
-        input[type="range"] { -webkit-appearance: none; width: 100px; height: 6px; background: #334155; border-radius: 5px; outline: none; }
-        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; }
-        .speed-display { font-weight: bold; color: var(--accent); min-width: 45px; font-size: 14px;}
-
-        /* --- Main Layout --- */
-        .main-layout {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        /* Left Side: Reader */
-        .reader-column {
-            flex: 2;
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-            overflow: hidden;
-            border-right: 1px solid #334155;
-        }
-
-        /* Right Side: Notes */
-        .notes-column {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-            background: #0b1120;
-            min-width: 250px;
-        }
-        .notes-column textarea {
-            flex: 1;
-            width: 100%;
-            background: #1e293b;
-            color: #fff;
-            border: 1px solid #334155;
-            border-radius: 8px;
-            padding: 15px;
-            resize: none;
-            font-size: 15px;
-            line-height: 1.6;
-        }
-        .notes-column textarea:focus { outline: 2px solid var(--accent); }
-
-        /* --- Reading Container --- */
-        #readingContainer {
-            display: none;
-            flex: 1;
-            overflow-y: auto;
-            background: var(--bg-color);
-            padding: 20px 0;
-            line-height: 1.8;
-            font-size: 20px;
-            white-space: pre-wrap;
+        /* LEFT: Reading Area */
+        .reader-pane { 
+            flex: 1; position: relative; overflow-y: auto; padding: 30px 40px; 
             scroll-behavior: smooth;
+            /* THE FOCUS MASK: Fades out text towards the bottom */
+            mask-image: linear-gradient(to bottom, black 0%, black 50%, transparent 95%);
+            -webkit-mask-image: linear-gradient(to bottom, black 0%, black 50%, transparent 95%);
         }
-        .word { transition: background-color 0.1s; border-radius: 4px; padding: 0 2px; }
-        .word.active { background-color: var(--highlight); color: #fff; }
+        
+        .word { transition: background-color 0.1s; border-radius: 4px; padding: 0 2px; line-height: 1.8; white-space: pre-wrap; }
+        .word.active { background-color: var(--highlight); color: #fff; font-weight: bold;}
 
-        /* --- Input Section (Hidden initially, shown when no audio) --- */
-        #inputSection {
-            background: var(--panel-bg);
-            padding: 20px;
-            border-radius: 12px;
-            margin-top: 20px;
+        /* RIGHT: Resizable Notes Pane */
+        .resizer { width: 6px; background: #334155; cursor: col-resize; transition: background 0.2s; }
+        .resizer:hover { background: var(--accent); }
+        
+        .notes-pane { 
+            width: 300px; min-width: 150px; max-width: 800px; background: var(--panel-bg); 
+            display: flex; flex-direction: column; padding: 20px;
+        }
+        .notes-pane h3 { margin-top: 0; font-size: 16px; color: var(--text-muted); margin-bottom: 10px; }
+        #notesArea {
+            flex: 1; width: 100%; background: #0b1120; color: #fff; border: 1px solid #334155;
+            border-radius: 8px; padding: 15px; resize: none; font-size: 16px; line-height: 1.5;
+        }
+        #notesArea:focus { outline: 2px solid var(--accent); }
+
+        /* --- INPUT SECTION --- */
+        #inputSection { 
+            display: flex; flex-direction: column; flex: 1; padding: 30px; max-width: 800px; margin: 0 auto; width: 100%; box-sizing: border-box; 
         }
         textarea#inputText {
-            width: 100%; box-sizing: border-box; font-size: 15px; padding: 12px;
-            border: 1px solid #334155; border-radius: 8px; background: #0f172a;
-            color: var(--text-main); resize: vertical; min-height: 120px;
-        }
-        select, input[type="text"], input[type="password"] { 
-            padding: 10px; width: 100%; max-width: 300px; box-sizing: border-box; 
-            background: #0f172a; color: white; border: 1px solid #334155; border-radius: 8px;
+            width: 100%; box-sizing: border-box; font-size: 16px; padding: 15px;
+            border: 1px solid #334155; border-radius: 8px; background: #1e293b;
+            color: var(--text-main); resize: none; flex: 1; margin-bottom: 15px;
         }
         button.primary { 
-            padding: 12px 24px; font-size: 16px; font-weight: 600; cursor: pointer; 
+            padding: 15px; font-size: 18px; font-weight: 600; cursor: pointer; 
             border: none; border-radius: 8px; background: var(--accent); color: white; 
-            transition: background 0.2s; margin-top: 10px;
         }
-        button.primary:hover { background: var(--accent-hover); }
-        
-        details { margin-bottom: 15px; }
-        summary { cursor: pointer; color: var(--text-muted); font-size: 14px; }
-        
-        .status { font-size: 14px; margin-top: 10px; color: #10b981; }
-        .error { color: #ef4444; }
+        button.primary:hover { background: #2563eb; }
 
-        /* Mobile Responsiveness */
+        /* --- FLOATING BOTTOM CONTROLS --- */
+        .floating-controls {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(30, 41, 59, 0.95); backdrop-filter: blur(10px);
+            padding: 10px 20px; border-radius: 50px; border: 1px solid #334155;
+            display: none; align-items: center; gap: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            z-index: 1000; flex-wrap: wrap; justify-content: center;
+        }
+        audio { height: 36px; border-radius: 18px; outline: none; }
+        audio::-webkit-media-controls-panel { background-color: #f1f5f9; }
+
+        .control-group { display: flex; align-items: center; gap: 8px; }
+        .btn { background: #475569; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;}
+        .btn:hover { background: #64748b; }
+        input[type="number"] { width: 45px; background: #0b1120; color: white; border: 1px solid #475569; border-radius: 4px; padding: 4px; text-align: center; }
+        
+        input[type="range"] { -webkit-appearance: none; width: 80px; height: 6px; background: #334155; border-radius: 5px; outline: none; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+        .speed-display { font-weight: bold; color: var(--accent); font-size: 14px; min-width: 40px; text-align: right;}
+
+        details summary { cursor: pointer; color: var(--text-muted); font-size: 14px; margin-bottom: 10px; }
+        
+        /* Mobile */
         @media (max-width: 768px) {
-            .main-layout { flex-direction: column; }
-            .notes-column { flex: 1; min-height: 200px; }
-            .reader-column { flex: 2; }
-            .top-bar { padding: 10px; justify-content: center; }
+            .main-container { flex-direction: column; }
+            .resizer { display: none; }
+            .notes-pane { width: 100% !important; height: 30vh; }
+            .floating-controls { border-radius: 12px; width: 90%; bottom: 10px; gap: 10px; }
+            input[type="range"] { width: 60px; }
         }
     </style>
 </head>
 <body>
 
-    <!-- STICKY TOP BAR (Always visible while reading) -->
-    <div class="top-bar">
-        <div class="controls-group">
-            <audio id="audioPlayer" controls></audio>
-        </div>
+    <!-- INPUT SCREEN (Shows only when no audio is active) -->
+    <div id="inputSection">
+        <details>
+            <summary>⚙️ API Settings</summary>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <input type="text" id="workerUrl" placeholder="Worker URL" style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0b1120; color: white;">
+                <input type="password" id="apiKey" placeholder="API Key" style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0b1120; color: white;">
+                <button id="saveSettings" style="padding: 10px 20px; background: #475569; color: white; border: none; border-radius: 6px; cursor: pointer;">Save</button>
+            </div>
+        </details>
+
+        <select id="voiceSelect" style="width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 6px; background: #1e293b; color: white; border: 1px solid #334155;">
+            <optgroup label="🇺🇸 US English">
+                <option value="en-US-AriaNeural">Aria (Female, Natural)</option>
+                <option value="en-US-GuyNeural">Guy (Male, Natural)</option>
+                <option value="en-US-JennyNeural">Jenny (Female, Conversational)</option>
+                <option value="en-US-ChristopherNeural">Christopher (Male, Deep)</option>
+            </optgroup>
+            <optgroup label="🇬🇧 UK English">
+                <option value="en-GB-SoniaNeural">Sonia (Female)</option>
+                <option value="en-GB-RyanNeural">Ryan (Male)</option>
+            </optgroup>
+        </select>
+
+        <textarea id="inputText" placeholder="Paste your text, code, tables, or images here... (Images, Code blocks, and Tables will be automatically replaced with 'Please look at the original text')"></textarea>
         
-        <div class="controls-group">
-            <!-- Custom Skip Group -->
-            <div class="skip-group">
-                <button class="skip-btn" id="skipBack">⏪ -</button>
-                <input type="number" id="skipSeconds" value="10" min="1" max="60">
-                <button class="skip-btn" id="skipForward">⏩ +</button>
-            </div>
+        <button class="primary" id="generateBtn">🔊 Generate Audio</button>
+        <div id="status" style="margin-top: 10px; color: #10b981; font-size: 14px;"></div>
+    </div>
 
-            <!-- Instant Speed Control -->
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 14px; color: var(--text-muted);">Speed:</span>
-                <input type="range" id="speedSlider" min="0.5" max="3.0" step="0.05" value="1.0">
-                <span id="speedValue" class="speed-display">1.00×</span>
-            </div>
+    <!-- READER SCREEN (Hidden initially) -->
+    <div class="main-container" id="readerSection" style="display: none;">
+        <div class="reader-pane" id="readingContainer"></div>
+        
+        <!-- Draggable Resizer -->
+        <div class="resizer" id="dragMe"></div>
 
-            <!-- Text Size Control -->
-            <div style="display: flex; align-items: center; gap: 5px;">
-                <button class="skip-btn" id="textSizeDown" style="background: #334155; border-radius: 4px; padding: 5px 10px;">A-</button>
-                <button class="skip-btn" id="textSizeUp" style="background: #334155; border-radius: 4px; padding: 5px 10px;">A+</button>
-            </div>
+        <!-- Notes -->
+        <div class="notes-pane" id="notesPane">
+            <h3>📝 Quick Notes</h3>
+            <textarea id="notesArea" placeholder="Type doubts here..."></textarea>
         </div>
     </div>
 
-    <!-- MAIN TWO-COLUMN LAYOUT -->
-    <div class="main-layout">
+    <!-- FLOATING CONTROLS (Bottom) -->
+    <div class="floating-controls" id="floatingControls">
+        <audio id="audioPlayer" controls></audio>
         
-        <!-- LEFT: TEXT READER -->
-        <div class="reader-column">
-            <div id="readingContainer"></div>
-            
-            <!-- Input Section (Hidden when reading) -->
-            <div id="inputSection">
-                <details>
-                    <summary>⚙️ API Settings</summary>
-                    <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
-                        <input type="text" id="workerUrl" placeholder="Worker URL">
-                        <input type="password" id="apiKey" placeholder="API Key">
-                        <button id="saveSettings" style="background: #334155; color: white; border: none; border-radius: 8px; padding: 10px; cursor: pointer;">Save</button>
-                    </div>
-                </details>
-
-                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
-                    <label style="font-size: 14px; color: var(--text-muted);">Voice:</label>
-                    <select id="voiceSelect" style="max-width: 250px;">
-                        <optgroup label="🇺🇸 US English">
-                            <option value="en-US-AriaNeural">Aria (Female, Natural)</option>
-                            <option value="en-US-GuyNeural">Guy (Male, Natural)</option>
-                            <option value="en-US-JennyNeural">Jenny (Female, Conversational)</option>
-                            <option value="en-US-ChristopherNeural">Christopher (Male, Deep)</option>
-                        </optgroup>
-                        <optgroup label="🇬🇧 UK English">
-                            <option value="en-GB-SoniaNeural">Sonia (Female)</option>
-                            <option value="en-GB-RyanNeural">Ryan (Male)</option>
-                        </optgroup>
-                        <optgroup label="🇮🇳 Indian English">
-                            <option value="en-IN-NeerjaNeural">Neerja (Female)</option>
-                            <option value="en-IN-PrabhatNeural">Prabhat (Male)</option>
-                        </optgroup>
-                    </select>
-                </div>
-
-                <textarea id="inputText" placeholder="Paste your long text here..."></textarea>
-                <button class="primary" id="generateBtn" style="width: 100%;">🔊 Generate Audio</button>
-                <div id="status" class="status"></div>
-            </div>
+        <div class="control-group">
+            <button class="btn" id="newBtn" style="background: #ef4444;">📝 New Text</button>
         </div>
 
-        <!-- RIGHT: NOTES -->
-        <div class="notes-column">
-            <h3 style="margin-top: 0; font-size: 16px; color: var(--text-muted); margin-bottom: 10px;">📝 Quick Notes</h3>
-            <textarea id="notesArea" placeholder="Type your doubts here while listening... (Auto-saves)"></textarea>
+        <div class="control-group">
+            <button class="btn" id="skipBack">⏪ -</button>
+            <input type="number" id="skipSeconds" value="10" min="1" max="60">
+            <button class="btn" id="skipForward">⏩ +</button>
         </div>
 
+        <div class="control-group">
+            <span style="font-size: 12px; color: var(--text-muted);">Speed:</span>
+            <input type="range" id="speedSlider" min="0.5" max="3.0" step="0.05" value="1.0">
+            <span id="speedValue" class="speed-display">1.0×</span>
+        </div>
+
+        <div class="control-group">
+            <button class="btn" id="textSizeDown">A-</button>
+            <button class="btn" id="textSizeUp">A+</button>
+        </div>
     </div>
 
 <script>
 // --- GLOBAL SPACEBAR PAUSE/RESUME ---
 document.addEventListener('keydown', (e) => {
-    // Check if user is typing in an input, textarea, or select
     const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
-    
     if (e.code === 'Space' && !isTyping) {
-        e.preventDefault(); // Prevent page from scrolling down
+        e.preventDefault();
         const player = document.getElementById('audioPlayer');
         if (player.src) {
-            if (player.paused) player.play();
-            else player.pause();
+            if (player.paused) player.play(); else player.pause();
         }
     }
 });
 
-// --- NOTES AUTO-SAVE ---
+// --- NOTES & SETTINGS AUTO-SAVE ---
 const notesArea = document.getElementById('notesArea');
 notesArea.value = localStorage.getItem('ttsQuickNotes') || '';
-notesArea.addEventListener('input', () => {
-    localStorage.setItem('ttsQuickNotes', notesArea.value);
-});
+notesArea.addEventListener('input', () => localStorage.setItem('ttsQuickNotes', notesArea.value));
 
-// --- Settings Management ---
 const workerUrlInput = document.getElementById('workerUrl');
 const apiKeyInput = document.getElementById('apiKey');
 workerUrlInput.value = localStorage.getItem('ttsWorkerUrl') || '';
 apiKeyInput.value = localStorage.getItem('ttsApiKey') || '';
 
 document.getElementById('saveSettings').addEventListener('click', () => {
-    let url = workerUrlInput.value.trim().replace(/\/$/, '');
-    const key = apiKeyInput.value.trim();
-    if (!url || !key) return alert('Please enter both URL and Key.');
-    localStorage.setItem('ttsWorkerUrl', url);
-    localStorage.setItem('ttsApiKey', key);
+    localStorage.setItem('ttsWorkerUrl', workerUrlInput.value.trim().replace(/\/$/, ''));
+    localStorage.setItem('ttsApiKey', apiKeyInput.value.trim());
     document.getElementById('status').textContent = '✅ Settings saved.';
 });
 
-// --- Audio Player Variables ---
+// --- DRAGGABLE SIDEBAR (Resizer) ---
+const resizer = document.getElementById('dragMe');
+const notesPane = document.getElementById('notesPane');
+let isResizing = false;
+
+resizer.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    document.body.style.cursor = 'col-resize';
+});
+document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    const newWidth = window.innerWidth - e.clientX;
+    if (newWidth > 150 && newWidth < 800) notesPane.style.width = `${newWidth}px`;
+});
+document.addEventListener('mouseup', () => {
+    isResizing = false;
+    document.body.style.cursor = 'default';
+});
+
+// --- AUDIO PLAYER CONTROLS ---
 const audioPlayer = document.getElementById('audioPlayer');
 const speedSlider = document.getElementById('speedSlider');
 const speedValue = document.getElementById('speedValue');
 const readingContainer = document.getElementById('readingContainer');
 const inputSection = document.getElementById('inputSection');
+const readerSection = document.getElementById('readerSection');
+const floatingControls = document.getElementById('floatingControls');
 
-// --- Instant Speed Control ---
+// Speed
 speedSlider.addEventListener('input', () => {
     const speed = parseFloat(speedSlider.value);
-    speedValue.textContent = speed.toFixed(2) + '×';
+    speedValue.textContent = speed.toFixed(1) + '×';
     audioPlayer.playbackRate = speed;
 });
 audioPlayer.preservesPitch = true;
 audioPlayer.mozPreservesPitch = true;
 audioPlayer.webkitPreservesPitch = true;
 
-// --- Custom Skip Logic ---
+// Skip
 document.getElementById('skipBack').addEventListener('click', () => {
-    const skipAmount = parseFloat(document.getElementById('skipSeconds').value) || 10;
-    audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - skipAmount);
+    audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - (parseFloat(document.getElementById('skipSeconds').value) || 10));
 });
 document.getElementById('skipForward').addEventListener('click', () => {
-    const skipAmount = parseFloat(document.getElementById('skipSeconds').value) || 10;
-    audioPlayer.currentTime = Math.min(audioPlayer.duration || 999999, audioPlayer.currentTime + skipAmount);
+    audioPlayer.currentTime = Math.min(audioPlayer.duration || 9999, audioPlayer.currentTime + (parseFloat(document.getElementById('skipSeconds').value) || 10));
 });
 
-// --- Text Size Control ---
-let currentTextSize = parseInt(localStorage.getItem('ttsTextSize')) || 20; 
+// Text Size
+let currentTextSize = parseInt(localStorage.getItem('ttsTextSize')) || 22; 
 function applyTextSize() {
     readingContainer.style.fontSize = currentTextSize + 'px';
     localStorage.setItem('ttsTextSize', currentTextSize);
 }
 applyTextSize(); 
 document.getElementById('textSizeUp').addEventListener('click', () => { currentTextSize = Math.min(40, currentTextSize + 2); applyTextSize(); });
-document.getElementById('textSizeDown').addEventListener('click', () => { currentTextSize = Math.max(14, currentTextSize - 2); applyTextSize(); });
+document.getElementById('textSizeDown').addEventListener('click', () => { currentTextSize = Math.max(16, currentTextSize - 2); applyTextSize(); });
 
-// --- Karaoke Highlighter Logic ---
+// New Text Button
+document.getElementById('newBtn').addEventListener('click', () => {
+    audioPlayer.pause();
+    audioPlayer.src = '';
+    readerSection.style.display = 'none';
+    floatingControls.style.display = 'none';
+    inputSection.style.display = 'flex';
+    window.scrollTo(0,0);
+});
+
+// --- KARAOKE HIGHLIGHTER ---
 let wordSpans = [];
 let totalChars = 0;
 let animationFrameId;
@@ -354,67 +310,67 @@ function updateHighlight() {
         }
 
         if (activeSpan) {
-            // PRACTICAL SCROLLING: Keep active word slightly above the middle (35% from top)
+            // Keep active word at 30% from the top. The mask fades out the bottom.
             const containerRect = readingContainer.getBoundingClientRect();
             const spanRect = activeSpan.getBoundingClientRect();
             
-            // If the word is below the 35% mark or above the 10% mark, scroll it back to the sweet spot
-            if (spanRect.top > containerRect.top + (containerRect.height * 0.35) || spanRect.bottom < containerRect.top + (containerRect.height * 0.10)) {
-                const offset = activeSpan.offsetTop - (readingContainer.clientHeight * 0.35);
+            if (spanRect.top > containerRect.top + (containerRect.height * 0.30) || spanRect.bottom < containerRect.top + (containerRect.height * 0.10)) {
+                const offset = activeSpan.offsetTop - (readingContainer.clientHeight * 0.30);
                 readingContainer.scrollTo({ top: offset, behavior: 'smooth' });
             }
         }
     }
     animationFrameId = requestAnimationFrame(updateHighlight);
 }
-
 audioPlayer.addEventListener('play', () => { cancelAnimationFrame(animationFrameId); updateHighlight(); });
-audioPlayer.addEventListener('pause', () => { cancelAnimationFrame(animationFrameId); });
-audioPlayer.addEventListener('seeked', () => { wordSpans.forEach(w => w.el.classList.remove('active')); });
+audioPlayer.addEventListener('pause', () => cancelAnimationFrame(animationFrameId));
+audioPlayer.addEventListener('seeked', () => wordSpans.forEach(w => w.el.classList.remove('active')));
 
-// --- Text Preprocessor ---
+// --- PREPROCESSOR (Code, Tables, Images) ---
 function preprocessText(raw) {
     let text = raw;
-    text = text.replace(/!\[([^\]]*)\]\([^)]+\)/g, (match, alt) => alt ? ` (Image: ${alt}) ` : ' See image. ');
+
+    // 1. Images
+    text = text.replace(/!\[([^\]]*)\]\([^)]+\)/g, (match, alt) => alt ? ` [Image: ${alt}] ` : ' [Image: Please look at the original text] ');
+
+    // 2. Code Blocks
+    text = text.replace(/```[\s\S]*?```/g, ' [Code Block: Please look at the original text] ');
+
+    // 3. Tables
     const lines = text.split('\n');
     const out = [];
     let inTable = false;
-    let headers = [];
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
         if (line.startsWith('|')) {
-            if (!inTable) {
-                inTable = true;
-                const cells = line.split('|').map(c => c.trim()).filter(c => c !== '' && !c.includes('---'));
-                headers = cells;
-                if (i + 1 < lines.length && lines[i + 1].includes('---')) i++;
-            }
+            if (!inTable) { inTable = true; }
         } else {
             if (inTable) {
-                out.push(` Here is a table with columns: ${headers.join(', ')}. Please refer to the table. `);
-                inTable = false; headers = [];
+                out.push(` [Table: Please refer to the original text] `);
+                inTable = false;
             }
             out.push(line);
         }
     }
-    if (inTable) out.push(` Here is a table with columns: ${headers.join(', ')}. Please refer to the table. `);
+    if (inTable) out.push(` [Table: Please refer to the original text] `);
+    
     return out.join('\n');
 }
 
-// --- Generate Speech ---
+// --- GENERATE ---
 document.getElementById('generateBtn').addEventListener('click', async () => {
     const statusEl = document.getElementById('status');
     const workerUrl = localStorage.getItem('ttsWorkerUrl');
     const apiKey = localStorage.getItem('ttsApiKey');
-
-    if (!workerUrl || !apiKey) return (statusEl.innerHTML = '<span class="error">⚠️ Please save your API Settings first.</span>');
     const rawText = document.getElementById('inputText').value.trim();
-    if (!rawText) return (statusEl.innerHTML = '<span class="error">⚠️ Please paste some text.</span>');
+
+    if (!workerUrl || !apiKey) return (statusEl.innerHTML = '<span style="color:#ef4444">⚠️ Save API Settings first.</span>');
+    if (!rawText) return (statusEl.innerHTML = '<span style="color:#ef4444">⚠️ Paste some text.</span>');
 
     const processedText = preprocessText(rawText);
     const voice = document.getElementById('voiceSelect').value;
     
-    statusEl.textContent = '⏳ Generating audio... (This may take a few seconds)';
+    statusEl.textContent = '⏳ Generating audio...';
 
     try {
         const response = await fetch(`${workerUrl}/v1/audio/speech`, {
@@ -429,15 +385,15 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
         audioPlayer.src = URL.createObjectURL(audioBlob);
         renderTextForHighlighting(processedText);
         
-        // Hide input, show reader
         inputSection.style.display = 'none';
-        readingContainer.style.display = 'block';
+        readerSection.style.display = 'flex';
+        floatingControls.style.display = 'flex';
         
         audioPlayer.playbackRate = parseFloat(speedSlider.value);
         audioPlayer.play();
         statusEl.textContent = '';
     } catch (err) {
-        statusEl.innerHTML = `<span class="error">❌ Error: ${err.message}</span>`;
+        statusEl.innerHTML = `<span style="color:#ef4444">❌ Error: ${err.message}</span>`;
     }
 });
 </script>
