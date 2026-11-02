@@ -396,7 +396,7 @@ function preprocessText(raw) {
     return out.join('\n');
 }
 
-// --- GENERATE ---
+// --- GENERATE (WITH CLIENT-SIDE CHUNKING) ---
 document.getElementById('generateBtn').addEventListener('click', async () => {
     const statusEl = document.getElementById('status');
     const workerUrl = localStorage.getItem('ttsWorkerUrl');
@@ -409,19 +409,44 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     const processedText = preprocessText(rawText);
     const voice = document.getElementById('voiceSelect').value;
     
-    statusEl.textContent = '⏳ Generating audio...';
+    // 1. Split the text into safe chunks (max 1500 chars) without breaking words
+    const chunks = [];
+    let currentChunk = "";
+    const sentences = processedText.split(/(?<=[.!?])\s+/); // Split by sentence endings
+    
+    for (const sentence of sentences) {
+        if ((currentChunk + sentence).length > 1500) {
+            if (currentChunk) chunks.push(currentChunk.trim());
+            currentChunk = sentence + " ";
+        } else {
+            currentChunk += sentence + " ";
+        }
+    }
+    if (currentChunk.trim()) chunks.push(currentChunk.trim());
+
+    statusEl.textContent = `⏳ Generating audio... (0 / ${chunks.length} parts)`;
+    const audioBlobs = [];
 
     try {
-        const response = await fetch(`${workerUrl}/v1/audio/speech`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ input: processedText, voice: voice, speed: 1.0, stream: false })
-        });
+        // 2. Fetch each chunk sequentially to avoid hitting Cloudflare limits
+        for (let i = 0; i < chunks.length; i++) {
+            statusEl.textContent = `⏳ Generating audio... (${i + 1} / ${chunks.length} parts)`;
+            
+            const response = await fetch(`${workerUrl}/v1/audio/speech`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ input: chunks[i], voice: voice, speed: 1.0, stream: false })
+            });
 
-        if (!response.ok) throw new Error(`Worker returned ${response.status}`);
-        const audioBlob = await response.blob();
+            if (!response.ok) throw new Error(`Worker returned ${response.status} on part ${i+1}`);
+            const blob = await response.blob();
+            audioBlobs.push(blob);
+        }
+
+        // 3. Combine all audio blobs into one seamless file
+        const combinedBlob = new Blob(audioBlobs, { type: 'audio/mpeg' });
+        audioPlayer.src = URL.createObjectURL(combinedBlob);
         
-        audioPlayer.src = URL.createObjectURL(audioBlob);
         renderTextForHighlighting(processedText);
         
         inputSection.style.display = 'none';
@@ -435,6 +460,3 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
         statusEl.innerHTML = `<span style="color:#ef4444">❌ Error: ${err.message}</span>`;
     }
 });
-</script>
-</body>
-</html>
