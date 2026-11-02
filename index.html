@@ -8,10 +8,10 @@
         :root {
             --bg-color: #0b1120;
             --panel-bg: #1e293b;
-            --text-dim: #94a3b8; /* Silver/Grey for unread text */
-            --text-active: #ffffff; /* Bright White for active line */
+            --text-dim: #94a3b8; 
+            --text-active: #ffffff; 
             --accent: #3b82f6;
-            --arrow-color: #ef4444; /* Red Arrow */
+            --arrow-color: #ef4444; 
         }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
@@ -30,29 +30,24 @@
             -webkit-mask-image: linear-gradient(to bottom, black 0%, black 50%, transparent 95%);
         }
         
-        /* Lines (Prevents left-to-right jittering) */
         .line { 
             display: block; 
             line-height: 1.8; 
-            margin-bottom: 10px;
-            padding-left: 25px; /* Space for the arrow */
+            margin-bottom: 12px;
+            padding-left: 30px; 
             position: relative;
             transition: color 0.2s, background-color 0.2s;
             cursor: pointer;
             border-radius: 4px;
         }
         
-        .line:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-        }
+        .line:hover { background-color: rgba(255, 255, 255, 0.05); }
         
-        /* Active Reading Line */
         .line.active { 
             color: var(--text-active); 
-            background-color: rgba(59, 130, 246, 0.1); /* Very subtle blue background */
+            background-color: rgba(59, 130, 246, 0.15); 
         }
         
-        /* The Red Arrow */
         .line.active::before {
             content: "➤";
             color: var(--arrow-color);
@@ -98,6 +93,7 @@
             border: none; border-radius: 8px; background: var(--accent); color: white; 
         }
         button.primary:hover { background: #2563eb; }
+        button.primary:disabled { background: #475569; cursor: not-allowed; }
 
         /* --- FLOATING CONTROLS --- */
         .floating-controls {
@@ -128,7 +124,7 @@
             .floating-controls { border-radius: 12px; width: 90%; bottom: 10px; gap: 10px; }
             input[type="range"] { width: 60px; }
             .reader-pane { padding: 20px 20px; }
-            .line { padding-left: 20px; margin-bottom: 15px;}
+            .line { padding-left: 25px; margin-bottom: 15px;}
         }
     </style>
 </head>
@@ -136,12 +132,13 @@
 
     <!-- INPUT SCREEN -->
     <div id="inputSection">
-        <details>
-            <summary>⚙️ API Settings</summary>
-            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                <input type="text" id="workerUrl" placeholder="Worker URL" style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0b1120; color: white;">
-                <input type="password" id="apiKey" placeholder="API Key" style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0b1120; color: white;">
-                <button id="saveSettings" style="padding: 10px 20px; background: #475569; color: white; border: none; border-radius: 6px; cursor: pointer;">Save</button>
+        <details open>
+            <summary>⚙️ API Settings (Required)</summary>
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; background: #1e293b; padding: 15px; border-radius: 8px;">
+                <input type="text" id="workerUrl" placeholder="https://my-edge-tts.xyz.workers.dev" style="padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0b1120; color: white;">
+                <input type="password" id="apiKey" placeholder="API Key (Password)" style="padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0b1120; color: white;">
+                <button id="saveSettings" style="padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">Save API Settings</button>
+                <div id="settingsStatus" style="font-size: 13px; color: #10b981; margin-top: 5px;"></div>
             </div>
         </details>
 
@@ -158,10 +155,10 @@
             </optgroup>
         </select>
 
-        <textarea id="inputText" placeholder="Paste your text here... (Code blocks, Tables, and Image links will be replaced with 'Please look at the original text')"></textarea>
+        <textarea id="inputText" placeholder="Paste your AI chat here... (Code blocks, Tables, and Image links will be replaced with 'Please look at the original text')"></textarea>
         
         <button class="primary" id="generateBtn">🔊 Generate Audio</button>
-        <div id="status" style="margin-top: 10px; color: #10b981; font-size: 14px;"></div>
+        <div id="status" style="margin-top: 10px; color: #3b82f6; font-size: 14px; font-weight: bold;"></div>
     </div>
 
     <!-- READER SCREEN -->
@@ -201,7 +198,53 @@
     </div>
 
 <script>
-// --- GLOBAL SPACEBAR PAUSE/RESUME ---
+// ==========================================
+// 1. SETTINGS & LOCAL STORAGE
+// ==========================================
+const workerUrlInput = document.getElementById('workerUrl');
+const apiKeyInput = document.getElementById('apiKey');
+const settingsStatus = document.getElementById('settingsStatus');
+
+// Load saved settings on startup
+workerUrlInput.value = localStorage.getItem('ttsWorkerUrl') || '';
+apiKeyInput.value = localStorage.getItem('ttsApiKey') || '';
+
+function saveSettings() {
+    let url = workerUrlInput.value.trim();
+    const key = apiKeyInput.value.trim();
+    
+    if (!url || !key) {
+        settingsStatus.style.color = '#ef4444';
+        settingsStatus.textContent = '⚠️ Both URL and Key are required.';
+        return;
+    }
+
+    // Sanitize URL (Add https:// if missing, strip trailing slashes or accidental endpoints)
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+    }
+    url = url.replace(/\/$/, ''); // Remove trailing slash
+    if (url.endsWith('/v1/audio/speech')) {
+        url = url.replace('/v1/audio/speech', '');
+    }
+
+    workerUrlInput.value = url; // Show the corrected URL to the user
+    localStorage.setItem('ttsWorkerUrl', url);
+    localStorage.setItem('ttsApiKey', key);
+    
+    settingsStatus.style.color = '#10b981';
+    settingsStatus.textContent = '✅ Settings saved successfully!';
+    setTimeout(() => { settingsStatus.textContent = ''; }, 3000);
+}
+
+document.getElementById('saveSettings').addEventListener('click', saveSettings);
+// Auto-save when they click away
+workerUrlInput.addEventListener('change', saveSettings);
+apiKeyInput.addEventListener('change', saveSettings);
+
+// ==========================================
+// 2. GLOBAL SPACEBAR PAUSE/RESUME
+// ==========================================
 document.addEventListener('keydown', (e) => {
     const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
     if (e.code === 'Space' && !isTyping) {
@@ -213,23 +256,13 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// --- NOTES & SETTINGS AUTO-SAVE ---
+// ==========================================
+// 3. NOTES & SIDEBAR RESIZER
+// ==========================================
 const notesArea = document.getElementById('notesArea');
 notesArea.value = localStorage.getItem('ttsQuickNotes') || '';
 notesArea.addEventListener('input', () => localStorage.setItem('ttsQuickNotes', notesArea.value));
 
-const workerUrlInput = document.getElementById('workerUrl');
-const apiKeyInput = document.getElementById('apiKey');
-workerUrlInput.value = localStorage.getItem('ttsWorkerUrl') || '';
-apiKeyInput.value = localStorage.getItem('ttsApiKey') || '';
-
-document.getElementById('saveSettings').addEventListener('click', () => {
-    localStorage.setItem('ttsWorkerUrl', workerUrlInput.value.trim().replace(/\/$/, ''));
-    localStorage.setItem('ttsApiKey', apiKeyInput.value.trim());
-    document.getElementById('status').textContent = '✅ Settings saved.';
-});
-
-// --- DRAGGABLE SIDEBAR ---
 const resizer = document.getElementById('dragMe');
 const notesPane = document.getElementById('notesPane');
 let isResizing = false;
@@ -241,7 +274,9 @@ document.addEventListener('mousemove', (e) => {
 });
 document.addEventListener('mouseup', () => { isResizing = false; document.body.style.cursor = 'default'; });
 
-// --- AUDIO PLAYER CONTROLS ---
+// ==========================================
+// 4. AUDIO CONTROLS
+// ==========================================
 const audioPlayer = document.getElementById('audioPlayer');
 const speedSlider = document.getElementById('speedSlider');
 const speedValue = document.getElementById('speedValue');
@@ -249,6 +284,7 @@ const readingContainer = document.getElementById('readingContainer');
 const inputSection = document.getElementById('inputSection');
 const readerSection = document.getElementById('readerSection');
 const floatingControls = document.getElementById('floatingControls');
+const generateBtn = document.getElementById('generateBtn');
 
 speedSlider.addEventListener('input', () => {
     const speed = parseFloat(speedSlider.value);
@@ -281,7 +317,9 @@ document.getElementById('newBtn').addEventListener('click', () => {
     inputSection.style.display = 'flex';
 });
 
-// --- LINE-LEVEL HIGHLIGHTER & CLICK-TO-SEEK ---
+// ==========================================
+// 5. KARAOKE HIGHLIGHTER & CLICK-TO-SEEK
+// ==========================================
 let lineDivs = [];
 let totalChars = 0;
 let animationFrameId;
@@ -290,21 +328,17 @@ function renderTextForHighlighting(text) {
     readingContainer.innerHTML = '';
     lineDivs = [];
     
-    // Split text by newlines to create line containers
     const lines = text.split('\n').filter(line => line.trim() !== '');
     let currentCharIndex = 0;
     
-    lines.forEach((lineText, index) => {
+    lines.forEach((lineText) => {
         const div = document.createElement('div');
         div.className = 'line';
         div.textContent = lineText;
         
-        // CLICK TO SEEK LOGIC (Line Level)
         div.addEventListener('click', () => {
             if (!audioPlayer.duration) return;
-            // Calculate percentage of text based on character count
             const percent = currentCharIndex / totalChars;
-            
             audioPlayer.currentTime = audioPlayer.duration * percent;
             
             lineDivs.forEach(ld => ld.classList.remove('active'));
@@ -321,7 +355,6 @@ function renderTextForHighlighting(text) {
             el: div 
         });
         
-        // Add +1 for the newline character
         currentCharIndex += lineText.length + 1; 
     });
     totalChars = currentCharIndex;
@@ -361,21 +394,23 @@ function updateHighlight() {
 audioPlayer.addEventListener('play', () => { cancelAnimationFrame(animationFrameId); updateHighlight(); });
 audioPlayer.addEventListener('pause', () => cancelAnimationFrame(animationFrameId));
 
-// --- UPGRADED PREPROCESSOR ---
+// ==========================================
+// 6. PREPROCESSOR
+// ==========================================
 function preprocessText(raw) {
     let text = raw;
 
-    // 1. Images (Markdown and HTML) -> Replaces with spoken text
+    // Images
     text = text.replace(/!\[([^\]]*)\]\([^)]+\)/g, ' [Image. Please look at the original text.] ');
     text = text.replace(/<img[^>]+>/g, ' [Image. Please look at the original text.] ');
 
-    // 2. Code Blocks -> Replaces with spoken text
-    text = text.replace(/```[\s\S]*?```/g, ' [Code block. Please look at the original text.] ');
+    // Code Blocks (Handles closed and unclosed blocks)
+    text = text.replace(/```[\s\S]*?(```|$)/g, ' [Code block. Please look at the original text.] ');
     
-    // 3. Inline Code (Single backticks)
+    // Inline Code
     text = text.replace(/`([^`]+)`/g, ' [Code snippet. Please look at the original text.] ');
 
-    // 4. Tables
+    // Tables
     const lines = text.split('\n');
     const out = [];
     let inTable = false;
@@ -396,26 +431,37 @@ function preprocessText(raw) {
     return out.join('\n');
 }
 
-// --- GENERATE (WITH CLIENT-SIDE CHUNKING) ---
-document.getElementById('generateBtn').addEventListener('click', async () => {
+// ==========================================
+// 7. GENERATE (WITH SAFE CHUNKING)
+// ==========================================
+generateBtn.addEventListener('click', async () => {
     const statusEl = document.getElementById('status');
     const workerUrl = localStorage.getItem('ttsWorkerUrl');
     const apiKey = localStorage.getItem('ttsApiKey');
     const rawText = document.getElementById('inputText').value.trim();
 
-    if (!workerUrl || !apiKey) return (statusEl.innerHTML = '<span style="color:#ef4444">⚠️ Save API Settings first.</span>');
-    if (!rawText) return (statusEl.innerHTML = '<span style="color:#ef4444">⚠️ Paste some text.</span>');
+    // Validation
+    if (!workerUrl || !apiKey) {
+        statusEl.style.color = '#ef4444';
+        statusEl.textContent = '⚠️ Save API Settings first.';
+        return;
+    }
+    if (!rawText) {
+        statusEl.style.color = '#ef4444';
+        statusEl.textContent = '⚠️ Paste some text.';
+        return;
+    }
 
     const processedText = preprocessText(rawText);
     const voice = document.getElementById('voiceSelect').value;
     
-    // 1. Split the text into safe chunks (max 1500 chars) without breaking words
+    // Split into safe 800-character chunks (Prevents Cloudflare 10ms timeout)
     const chunks = [];
     let currentChunk = "";
-    const sentences = processedText.split(/(?<=[.!?])\s+/); // Split by sentence endings
+    const sentences = processedText.split(/(?<=[.!?])\s+/); 
     
     for (const sentence of sentences) {
-        if ((currentChunk + sentence).length > 1500) {
+        if ((currentChunk + sentence).length > 800) {
             if (currentChunk) chunks.push(currentChunk.trim());
             currentChunk = sentence + " ";
         } else {
@@ -424,26 +470,38 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     }
     if (currentChunk.trim()) chunks.push(currentChunk.trim());
 
+    generateBtn.disabled = true;
+    statusEl.style.color = '#3b82f6';
     statusEl.textContent = `⏳ Generating audio... (0 / ${chunks.length} parts)`;
     const audioBlobs = [];
 
     try {
-        // 2. Fetch each chunk sequentially to avoid hitting Cloudflare limits
         for (let i = 0; i < chunks.length; i++) {
             statusEl.textContent = `⏳ Generating audio... (${i + 1} / ${chunks.length} parts)`;
             
             const response = await fetch(`${workerUrl}/v1/audio/speech`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ input: chunks[i], voice: voice, speed: 1.0, stream: false })
+                headers: { 
+                    'Authorization': `Bearer ${apiKey}`, 
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify({ 
+                    input: chunks[i], 
+                    voice: voice, 
+                    speed: 1.0, 
+                    stream: false 
+                })
             });
 
-            if (!response.ok) throw new Error(`Worker returned ${response.status} on part ${i+1}`);
+            if (!response.ok) {
+                throw new Error(`Worker returned ${response.status} on part ${i+1}. Check your Cloudflare dashboard logs.`);
+            }
+            
             const blob = await response.blob();
             audioBlobs.push(blob);
         }
 
-        // 3. Combine all audio blobs into one seamless file
+        // Combine all audio chunks into one seamless MP3
         const combinedBlob = new Blob(audioBlobs, { type: 'audio/mpeg' });
         audioPlayer.src = URL.createObjectURL(combinedBlob);
         
@@ -455,8 +513,16 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
         
         audioPlayer.playbackRate = parseFloat(speedSlider.value);
         audioPlayer.play();
+        
         statusEl.textContent = '';
+        generateBtn.disabled = false;
+        
     } catch (err) {
-        statusEl.innerHTML = `<span style="color:#ef4444">❌ Error: ${err.message}</span>`;
+        statusEl.style.color = '#ef4444';
+        statusEl.textContent = `❌ Error: ${err.message}`;
+        generateBtn.disabled = false;
     }
 });
+</script>
+</body>
+</html>
