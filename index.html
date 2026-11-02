@@ -8,13 +8,12 @@
         :root {
             --bg-color: #0b1120;
             --panel-bg: #1e293b;
-            --text-main: #ffffff; /* Pure white text */
             --accent: #3b82f6;
             --arrow-color: #ef4444; 
         }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-main);
+            margin: 0; padding: 0; background-color: var(--bg-color); color: #ffffff;
             height: 100vh; display: flex; flex-direction: column; overflow: hidden;
         }
 
@@ -27,42 +26,33 @@
             scroll-behavior: smooth;
         }
         
-        /* Lines - Now fully clickable and visible */
+        /* Lines */
         .line { 
             display: block; 
             line-height: 1.8; 
             margin-bottom: 12px;
-            padding: 4px 10px 4px 35px; 
+            padding: 6px 12px 6px 40px; 
             position: relative;
-            transition: color 0.2s, background-color 0.2s;
+            transition: background-color 0.2s, opacity 0.2s;
             cursor: pointer;
             border-radius: 6px;
-            color: #94a3b8; /* Unread text is light grey */
+            color: #ffffff !important; /* Force Pure White */
+            opacity: 0.5; /* Dim unread text slightly */
         }
         
+        /* Hover effect for clicking */
         .line:hover { 
             background-color: rgba(255, 255, 255, 0.1); 
-            color: #ffffff;
-        }
-        
-        /* Show a ghost arrow on hover to indicate it's clickable */
-        .line:hover::before {
-            content: "➤";
-            color: #64748b;
-            position: absolute;
-            left: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 14px;
+            opacity: 0.8;
         }
         
         /* Active Reading Line */
         .line.active { 
-            color: var(--text-main); 
-            background-color: rgba(59, 130, 246, 0.15); 
+            opacity: 1; /* 100% Bright White */
+            background-color: rgba(59, 130, 246, 0.2); 
         }
         
-        /* Solid Red Arrow for active line */
+        /* Solid Red Arrow for active line ONLY */
         .line.active::before {
             content: "➤";
             color: var(--arrow-color);
@@ -70,7 +60,7 @@
             left: 10px;
             top: 50%;
             transform: translateY(-50%);
-            font-size: 18px;
+            font-size: 20px;
             animation: pulse 1s infinite alternate;
         }
 
@@ -327,7 +317,7 @@ document.getElementById('newBtn').addEventListener('click', () => {
 });
 
 // ==========================================
-// 5. RENDERING & HIGHLIGHTING
+// 5. RENDERING & HIGHLIGHTING (FIXED ENGINE)
 // ==========================================
 let lineDivs = [];
 let totalChars = 0;
@@ -337,21 +327,24 @@ function renderTextForHighlighting(text) {
     readingContainer.innerHTML = '';
     lineDivs = [];
     
-    // Split by newline but KEEP all lines (even empty ones) so character counts map perfectly.
+    // Split by newline. Keep all lines to ensure accurate character mapping.
     const lines = text.split('\n');
     let currentCharIndex = 0;
     
     lines.forEach((lineText) => {
         const div = document.createElement('div');
         div.className = 'line';
-        // If line is empty, use a space so it still takes up vertical room
-        div.textContent = lineText.trim() !== '' ? lineText : ' '; 
+        
+        // Use a non-breaking space for empty lines to keep the layout intact
+        div.textContent = lineText.trim() !== '' ? lineText : '\u00A0'; 
         
         const thisLineStart = currentCharIndex;
-        
+        const lineLength = lineText.length;
+
+        // Click to Seek
         div.addEventListener('click', () => {
             if (!audioPlayer.duration) return;
-            // Calculate percentage based on where this line starts
+            // Calculate percentage based on where this line starts in the text
             const percent = thisLineStart / text.length;
             audioPlayer.currentTime = audioPlayer.duration * percent;
             
@@ -365,12 +358,12 @@ function renderTextForHighlighting(text) {
         
         lineDivs.push({ 
             start: thisLineStart, 
-            end: currentCharIndex + lineText.length, 
+            end: thisLineStart + lineLength, 
             el: div 
         });
         
         // +1 for the newline character
-        currentCharIndex += lineText.length + 1; 
+        currentCharIndex += lineLength + 1; 
     });
     totalChars = text.length;
 }
@@ -379,21 +372,22 @@ function updateHighlight() {
     if (!audioPlayer.paused && audioPlayer.duration) {
         const progress = audioPlayer.currentTime / audioPlayer.duration;
         const currentChar = progress * totalChars;
+        
         let activeDiv = null;
         
         for (let i = 0; i < lineDivs.length; i++) {
             const ld = lineDivs[i];
             if (currentChar >= ld.start && currentChar < ld.end) {
-                if (!ld.el.classList.contains('active')) {
-                    lineDivs.forEach(d => d.classList.remove('active'));
-                    ld.el.classList.add('active');
-                    activeDiv = ld.el;
-                }
+                activeDiv = ld.el;
                 break;
             }
         }
 
-        if (activeDiv) {
+        if (activeDiv && !activeDiv.classList.contains('active')) {
+            lineDivs.forEach(ld => ld.el.classList.remove('active'));
+            activeDiv.classList.add('active');
+
+            // Scroll into view comfortably
             const containerRect = readingContainer.getBoundingClientRect();
             const divRect = activeDiv.getBoundingClientRect();
             
@@ -462,7 +456,7 @@ generateBtn.addEventListener('click', async () => {
     const processedText = preprocessText(rawText);
     const voice = document.getElementById('voiceSelect').value;
     
-    // Bulletproof Chunking (Max 800 chars)
+    // Bulletproof Chunking (Max 800 chars to prevent Cloudflare 500 errors)
     const chunks = [];
     let remaining = processedText;
     
@@ -473,7 +467,7 @@ generateBtn.addEventListener('click', async () => {
         }
         // Find the last space within 800 chars to avoid cutting words in half
         let splitIndex = remaining.lastIndexOf(' ', 800);
-        if (splitIndex === -1) splitIndex = 800; // If no space found, just cut at 800
+        if (splitIndex === -1) splitIndex = 800; 
         
         chunks.push(remaining.slice(0, splitIndex));
         remaining = remaining.slice(splitIndex).trim();
@@ -503,7 +497,7 @@ generateBtn.addEventListener('click', async () => {
             });
 
             if (!response.ok) {
-                throw new Error(`Worker returned ${response.status} on part ${i+1}. Check your Cloudflare dashboard.`);
+                throw new Error(`Worker returned ${response.status} on part ${i+1}.`);
             }
             
             const blob = await response.blob();
@@ -513,7 +507,7 @@ generateBtn.addEventListener('click', async () => {
         const combinedBlob = new Blob(audioBlobs, { type: 'audio/mpeg' });
         audioPlayer.src = URL.createObjectURL(combinedBlob);
         
-        // Render the EXACT processedText that was sent to the API
+        // Render the text that was sent to the API
         renderTextForHighlighting(processedText);
         
         inputSection.style.display = 'none';
