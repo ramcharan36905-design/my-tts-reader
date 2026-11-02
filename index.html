@@ -8,51 +8,59 @@
         :root {
             --bg-color: #0b1120;
             --panel-bg: #1e293b;
-            --text-main: #94a3b8; /* Dimmed text by default */
-            --text-active: #ffffff; /* Bright text for reading */
+            --text-dim: #94a3b8; /* Silver/Grey for unread text */
+            --text-active: #ffffff; /* Bright White for active line */
             --accent: #3b82f6;
             --arrow-color: #ef4444; /* Red Arrow */
         }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-main);
+            margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-dim);
             height: 100vh; display: flex; flex-direction: column; overflow: hidden;
         }
 
-        /* --- MAIN LAYOUT (Split Screen) --- */
+        /* --- MAIN LAYOUT --- */
         .main-container { display: flex; flex: 1; overflow: hidden; position: relative; }
         
         /* LEFT: Reading Area */
         .reader-pane { 
             flex: 1; position: relative; overflow-y: auto; padding: 40px 60px; 
             scroll-behavior: smooth;
-            /* Focus Mask: Fades out text towards the bottom */
             mask-image: linear-gradient(to bottom, black 0%, black 50%, transparent 95%);
             -webkit-mask-image: linear-gradient(to bottom, black 0%, black 50%, transparent 95%);
         }
         
-        /* Words */
-        .word { 
-            transition: color 0.1s; line-height: 2; white-space: pre-wrap; cursor: pointer; 
-            position: relative; display: inline-block;
+        /* Lines (Prevents left-to-right jittering) */
+        .line { 
+            display: block; 
+            line-height: 1.8; 
+            margin-bottom: 10px;
+            padding-left: 25px; /* Space for the arrow */
+            position: relative;
+            transition: color 0.2s, background-color 0.2s;
+            cursor: pointer;
+            border-radius: 4px;
         }
-        .word:hover { color: #cbd5e1; background: rgba(255,255,255,0.05); border-radius: 4px;}
         
-        /* Active Reading Word */
-        .word.active { 
+        .line:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        
+        /* Active Reading Line */
+        .line.active { 
             color: var(--text-active); 
-            font-weight: 600;
+            background-color: rgba(59, 130, 246, 0.1); /* Very subtle blue background */
         }
         
         /* The Red Arrow */
-        .word.active::before {
+        .line.active::before {
             content: "➤";
             color: var(--arrow-color);
             position: absolute;
-            left: -22px;
+            left: 0;
             top: 50%;
             transform: translateY(-50%);
-            font-size: 16px;
+            font-size: 18px;
             animation: pulse 1s infinite alternate;
         }
 
@@ -61,7 +69,7 @@
             to { opacity: 1; transform: translateY(-50%) scale(1.1); }
         }
 
-        /* RIGHT: Resizable Notes Pane */
+        /* RIGHT: Notes */
         .resizer { width: 6px; background: #334155; cursor: col-resize; transition: background 0.2s; }
         .resizer:hover { background: var(--accent); }
         
@@ -91,7 +99,7 @@
         }
         button.primary:hover { background: #2563eb; }
 
-        /* --- FLOATING BOTTOM CONTROLS --- */
+        /* --- FLOATING CONTROLS --- */
         .floating-controls {
             position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
             background: rgba(30, 41, 59, 0.95); backdrop-filter: blur(10px);
@@ -119,8 +127,8 @@
             .notes-pane { width: 100% !important; height: 30vh; }
             .floating-controls { border-radius: 12px; width: 90%; bottom: 10px; gap: 10px; }
             input[type="range"] { width: 60px; }
-            .word.active::before { left: -16px; font-size: 12px; }
-            .reader-pane { padding: 20px 30px; }
+            .reader-pane { padding: 20px 20px; }
+            .line { padding-left: 20px; margin-bottom: 15px;}
         }
     </style>
 </head>
@@ -150,7 +158,7 @@
             </optgroup>
         </select>
 
-        <textarea id="inputText" placeholder="Paste your text, code, tables, or images here... (Images, Code blocks, and Tables will be replaced with 'Please look at the original text')"></textarea>
+        <textarea id="inputText" placeholder="Paste your text here... (Code blocks, Tables, and Image links will be replaced with 'Please look at the original text')"></textarea>
         
         <button class="primary" id="generateBtn">🔊 Generate Audio</button>
         <div id="status" style="margin-top: 10px; color: #10b981; font-size: 14px;"></div>
@@ -159,9 +167,7 @@
     <!-- READER SCREEN -->
     <div class="main-container" id="readerSection" style="display: none;">
         <div class="reader-pane" id="readingContainer"></div>
-        
         <div class="resizer" id="dragMe"></div>
-
         <div class="notes-pane" id="notesPane">
             <h3>📝 Quick Notes</h3>
             <textarea id="notesArea" placeholder="Type doubts here..."></textarea>
@@ -227,7 +233,6 @@ document.getElementById('saveSettings').addEventListener('click', () => {
 const resizer = document.getElementById('dragMe');
 const notesPane = document.getElementById('notesPane');
 let isResizing = false;
-
 resizer.addEventListener('mousedown', () => { isResizing = true; document.body.style.cursor = 'col-resize'; });
 document.addEventListener('mousemove', (e) => {
     if (!isResizing) return;
@@ -245,7 +250,6 @@ const inputSection = document.getElementById('inputSection');
 const readerSection = document.getElementById('readerSection');
 const floatingControls = document.getElementById('floatingControls');
 
-// Speed
 speedSlider.addEventListener('input', () => {
     const speed = parseFloat(speedSlider.value);
     speedValue.textContent = speed.toFixed(1) + '×';
@@ -253,7 +257,6 @@ speedSlider.addEventListener('input', () => {
 });
 audioPlayer.preservesPitch = true;
 
-// Skip Buttons
 document.getElementById('skipBack').addEventListener('click', () => {
     audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - (parseFloat(document.getElementById('skipSeconds').value) || 10));
 });
@@ -261,7 +264,6 @@ document.getElementById('skipForward').addEventListener('click', () => {
     audioPlayer.currentTime = Math.min(audioPlayer.duration || 9999, audioPlayer.currentTime + (parseFloat(document.getElementById('skipSeconds').value) || 10));
 });
 
-// Text Size
 let currentTextSize = parseInt(localStorage.getItem('ttsTextSize')) || 22; 
 function applyTextSize() {
     readingContainer.style.fontSize = currentTextSize + 'px';
@@ -271,7 +273,6 @@ applyTextSize();
 document.getElementById('textSizeUp').addEventListener('click', () => { currentTextSize = Math.min(40, currentTextSize + 2); applyTextSize(); });
 document.getElementById('textSizeDown').addEventListener('click', () => { currentTextSize = Math.max(16, currentTextSize - 2); applyTextSize(); });
 
-// New Text Button
 document.getElementById('newBtn').addEventListener('click', () => {
     audioPlayer.pause();
     audioPlayer.src = '';
@@ -280,45 +281,48 @@ document.getElementById('newBtn').addEventListener('click', () => {
     inputSection.style.display = 'flex';
 });
 
-// --- KARAOKE HIGHLIGHTER & CLICK-TO-SEEK ---
-let wordSpans = [];
+// --- LINE-LEVEL HIGHLIGHTER & CLICK-TO-SEEK ---
+let lineDivs = [];
 let totalChars = 0;
 let animationFrameId;
 
 function renderTextForHighlighting(text) {
     readingContainer.innerHTML = '';
-    wordSpans = [];
-    const words = text.split(/(\s+)/); 
+    lineDivs = [];
+    
+    // Split text by newlines to create line containers
+    const lines = text.split('\n').filter(line => line.trim() !== '');
     let currentCharIndex = 0;
     
-    words.forEach(word => {
-        if (word.trim().length === 0) {
-            readingContainer.appendChild(document.createTextNode(word));
-            currentCharIndex += word.length;
-        } else {
-            const span = document.createElement('span');
-            span.className = 'word';
-            span.textContent = word;
+    lines.forEach((lineText, index) => {
+        const div = document.createElement('div');
+        div.className = 'line';
+        div.textContent = lineText;
+        
+        // CLICK TO SEEK LOGIC (Line Level)
+        div.addEventListener('click', () => {
+            if (!audioPlayer.duration) return;
+            // Calculate percentage of text based on character count
+            const percent = currentCharIndex / totalChars;
             
-            // --- CLICK TO SEEK LOGIC ---
-            span.addEventListener('click', () => {
-                if (!audioPlayer.duration) return;
-                // Calculate the percentage of the text this word represents
-                const percent = currentCharIndex / totalChars;
-                // Jump to that timestamp in the audio
-                audioPlayer.currentTime = audioPlayer.duration * percent;
-                
-                // Force update the highlight immediately
-                wordSpans.forEach(w => w.el.classList.remove('active'));
-                span.classList.add('active');
-                
-                if (audioPlayer.paused) audioPlayer.play();
-            });
+            audioPlayer.currentTime = audioPlayer.duration * percent;
+            
+            lineDivs.forEach(ld => ld.classList.remove('active'));
+            div.classList.add('active');
+            
+            if (audioPlayer.paused) audioPlayer.play();
+        });
 
-            readingContainer.appendChild(span);
-            wordSpans.push({ start: currentCharIndex, end: currentCharIndex + word.length, el: span });
-            currentCharIndex += word.length;
-        }
+        readingContainer.appendChild(div);
+        
+        lineDivs.push({ 
+            start: currentCharIndex, 
+            end: currentCharIndex + lineText.length, 
+            el: div 
+        });
+        
+        // Add +1 for the newline character
+        currentCharIndex += lineText.length + 1; 
     });
     totalChars = currentCharIndex;
 }
@@ -327,29 +331,26 @@ function updateHighlight() {
     if (!audioPlayer.paused && audioPlayer.duration) {
         const progress = audioPlayer.currentTime / audioPlayer.duration;
         const currentChar = progress * totalChars;
-        let activeSpan = null;
+        let activeDiv = null;
         
-        for (let i = 0; i < wordSpans.length; i++) {
-            const w = wordSpans[i];
-            if (currentChar >= w.start && currentChar < w.end) {
-                if (!w.el.classList.contains('active')) {
-                    // Remove active from all others
-                    wordSpans.forEach(ws => ws.el.classList.remove('active'));
-                    // Add to current
-                    w.el.classList.add('active');
-                    activeSpan = w.el;
+        for (let i = 0; i < lineDivs.length; i++) {
+            const ld = lineDivs[i];
+            if (currentChar >= ld.start && currentChar < ld.end) {
+                if (!ld.el.classList.contains('active')) {
+                    lineDivs.forEach(d => d.classList.remove('active'));
+                    ld.el.classList.add('active');
+                    activeDiv = ld.el;
                 }
                 break;
             }
         }
 
-        if (activeSpan) {
+        if (activeDiv) {
             const containerRect = readingContainer.getBoundingClientRect();
-            const spanRect = activeSpan.getBoundingClientRect();
+            const divRect = activeDiv.getBoundingClientRect();
             
-            // Only scroll if the word is outside the 15% - 35% comfort zone
-            if (spanRect.top > containerRect.top + (containerRect.height * 0.35) || spanRect.bottom < containerRect.top + (containerRect.height * 0.15)) {
-                const offset = activeSpan.offsetTop - (readingContainer.clientHeight * 0.30);
+            if (divRect.top > containerRect.top + (containerRect.height * 0.35) || divRect.bottom < containerRect.top + (containerRect.height * 0.15)) {
+                const offset = activeDiv.offsetTop - (readingContainer.clientHeight * 0.30);
                 readingContainer.scrollTo({ top: offset, behavior: 'smooth' });
             }
         }
@@ -364,15 +365,17 @@ audioPlayer.addEventListener('pause', () => cancelAnimationFrame(animationFrameI
 function preprocessText(raw) {
     let text = raw;
 
-    // 1. Images (Markdown and HTML)
+    // 1. Images (Markdown and HTML) -> Replaces with spoken text
     text = text.replace(/!\[([^\]]*)\]\([^)]+\)/g, ' [Image. Please look at the original text.] ');
     text = text.replace(/<img[^>]+>/g, ' [Image. Please look at the original text.] ');
 
-    // 2. Code Blocks (Triple backticks) and Inline Code (Single backticks)
+    // 2. Code Blocks -> Replaces with spoken text
     text = text.replace(/```[\s\S]*?```/g, ' [Code block. Please look at the original text.] ');
+    
+    // 3. Inline Code (Single backticks)
     text = text.replace(/`([^`]+)`/g, ' [Code snippet. Please look at the original text.] ');
 
-    // 3. Tables
+    // 4. Tables
     const lines = text.split('\n');
     const out = [];
     let inTable = false;
@@ -403,12 +406,7 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     if (!workerUrl || !apiKey) return (statusEl.innerHTML = '<span style="color:#ef4444">⚠️ Save API Settings first.</span>');
     if (!rawText) return (statusEl.innerHTML = '<span style="color:#ef4444">⚠️ Paste some text.</span>');
 
-    // RUN PREPROCESSOR
     const processedText = preprocessText(rawText);
-    
-    // Debug: Log what is actually being sent to Microsoft
-    console.log("Processed Text Sent to TTS:", processedText);
-
     const voice = document.getElementById('voiceSelect').value;
     
     statusEl.textContent = '⏳ Generating audio...';
