@@ -107,17 +107,36 @@
             padding: 10px 20px; border-radius: 50px; border: 1px solid #334155;
             display: none; align-items: center; gap: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
             z-index: 1000; flex-wrap: wrap; justify-content: center;
+            max-width: 95vw;
         }
         audio { height: 36px; border-radius: 18px; outline: none; }
         audio::-webkit-media-controls-panel { background-color: #f1f5f9; }
 
-        .control-group { display: flex; align-items: center; gap: 8px; }
+        .control-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
         .btn { background: #475569; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;}
         .btn:hover { background: #64748b; }
         
-        input[type="range"] { -webkit-appearance: none; width: 80px; height: 6px; background: #334155; border-radius: 5px; outline: none; }
+        input[type="range"] { -webkit-appearance: none; width: 90px; height: 6px; background: #334155; border-radius: 5px; outline: none; }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; }
-        .speed-display { font-weight: bold; color: var(--accent); font-size: 14px; min-width: 40px; text-align: right;}
+        input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: none; border-radius: 50%; background: var(--accent); cursor: pointer; }
+
+        .speed-input {
+            width: 70px; background: #0b1120; color: #fff; border: 1px solid #475569;
+            border-radius: 6px; padding: 5px 4px; text-align: center; font-weight: 700; font-size: 14px;
+            -moz-appearance: textfield;
+        }
+        .speed-input::-webkit-outer-spin-button, .speed-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .speed-input:focus { outline: 2px solid var(--accent); }
+        .lbl { font-size: 12px; color: #94a3b8; }
+
+        #presetChips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .chip { display: flex; align-items: stretch; background: #334155; border-radius: 6px; overflow: hidden; }
+        .chip-apply { background: transparent; border: none; color: #fff; padding: 5px 4px 5px 9px; font-size: 13px; font-weight: 700; cursor: pointer; }
+        .chip-apply:hover { color: var(--accent); }
+        .chip-del { background: transparent; border: none; color: #94a3b8; padding: 5px 7px 5px 3px; font-size: 10px; cursor: pointer; }
+        .chip-del:hover { color: #ef4444; }
+
+        #playHint { display: none; font-size: 12px; color: #fbbf24; font-weight: 700; }
 
         details summary { cursor: pointer; color: #94a3b8; font-size: 14px; margin-bottom: 10px; }
         
@@ -127,7 +146,8 @@
             .resizer { display: none; }
             .notes-pane { width: 100% !important; height: 30vh; }
             .floating-controls { border-radius: 12px; width: 90%; bottom: 10px; gap: 10px; }
-            input[type="range"] { width: 60px; }
+            input[type="range"] { width: 70px; }
+            .speed-input { width: 58px; }
             .reader-pane { padding: 20px 20px; }
         }
     </style>
@@ -190,15 +210,22 @@
         </div>
 
         <div class="control-group">
-            <span style="font-size: 12px; color: #94a3b8;">Speed:</span>
-            <input type="range" id="speedSlider" min="0.5" max="3.0" step="0.05" value="1.0">
-            <span id="speedValue" class="speed-display">1.0×</span>
+            <span class="lbl">Speed:</span>
+            <input type="range" id="speedSlider" min="0.5" max="3" step="0.01" value="1.00">
+            <input type="number" id="speedInput" class="speed-input" min="0.25" max="4" step="0.01" value="1.00" inputmode="decimal" title="Type any speed and press Enter">
+        </div>
+
+        <div class="control-group">
+            <button class="btn" id="savePresetBtn" title="Save current speed as a preset">💾 Save</button>
+            <div id="presetChips"></div>
         </div>
 
         <div class="control-group">
             <button class="btn" id="textSizeDown">A-</button>
             <button class="btn" id="textSizeUp">A+</button>
         </div>
+
+        <span id="playHint">▶ Press Space to start</span>
     </div>
 
 <script>
@@ -242,21 +269,43 @@ function saveSettings() {
 document.getElementById('saveSettings').addEventListener('click', saveSettings);
 
 // ==========================================
-// 2. GLOBAL SPACEBAR PAUSE/RESUME
+// 2. ELEMENT REFERENCES
 // ==========================================
-document.addEventListener('keydown', (e) => {
-    const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
-    if (e.code === 'Space' && !isTyping) {
-        e.preventDefault();
-        const player = document.getElementById('audioPlayer');
-        if (player.src) {
-            if (player.paused) player.play(); else player.pause();
-        }
+const audioPlayer = document.getElementById('audioPlayer');
+const readingContainer = document.getElementById('readingContainer');
+const inputSection = document.getElementById('inputSection');
+const readerSection = document.getElementById('readerSection');
+const floatingControls = document.getElementById('floatingControls');
+const generateBtn = document.getElementById('generateBtn');
+const playHint = document.getElementById('playHint');
+const speedSlider = document.getElementById('speedSlider');
+const speedInput = document.getElementById('speedInput');
+const presetChips = document.getElementById('presetChips');
+
+let isReaderVisible = false;
+let currentAudioUrl = null;
+
+// ==========================================
+// 3. GLOBAL SPACEBAR PAUSE/RESUME
+// ==========================================
+window.addEventListener('keydown', (e) => {
+    if (e.code !== 'Space' && e.key !== ' ') return;
+    if (e.repeat) return;
+    const ae = document.activeElement;
+    const tag = ae ? ae.tagName : '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (ae && ae.isContentEditable)) return;
+    if (!isReaderVisible) return;
+    e.preventDefault();
+    if (!audioPlayer.src) return;
+    if (audioPlayer.paused) {
+        audioPlayer.play().then(() => { playHint.style.display = 'none'; }).catch(() => {});
+    } else {
+        audioPlayer.pause();
     }
 });
 
 // ==========================================
-// 3. NOTES & SIDEBAR RESIZER
+// 4. NOTES & SIDEBAR RESIZER
 // ==========================================
 const notesArea = document.getElementById('notesArea');
 notesArea.value = localStorage.getItem('ttsQuickNotes') || '';
@@ -274,29 +323,121 @@ document.addEventListener('mousemove', (e) => {
 document.addEventListener('mouseup', () => { isResizing = false; document.body.style.cursor = 'default'; });
 
 // ==========================================
-// 4. AUDIO CONTROLS
+// 5. SPEED CONTROL & PRESETS
 // ==========================================
-const audioPlayer = document.getElementById('audioPlayer');
-const speedSlider = document.getElementById('speedSlider');
-const speedValue = document.getElementById('speedValue');
-const readingContainer = document.getElementById('readingContainer');
-const inputSection = document.getElementById('inputSection');
-const readerSection = document.getElementById('readerSection');
-const floatingControls = document.getElementById('floatingControls');
-const generateBtn = document.getElementById('generateBtn');
+const SPEED_MIN = 0.25;
+const SPEED_MAX = 4;
+
+let currentSpeed = parseFloat(localStorage.getItem('ttsSpeed'));
+if (!isFinite(currentSpeed) || currentSpeed < SPEED_MIN || currentSpeed > SPEED_MAX) currentSpeed = 1;
+currentSpeed = Math.round(currentSpeed * 100) / 100;
+
+function applySpeed(speed, opts) {
+    opts = opts || {};
+    let s = Number(speed);
+    if (!isFinite(s)) s = currentSpeed;
+    s = Math.min(SPEED_MAX, Math.max(SPEED_MIN, s));
+    s = Math.round(s * 100) / 100;
+    currentSpeed = s;
+    audioPlayer.playbackRate = s;
+    if (!opts.skipInput) speedInput.value = s.toFixed(2);
+    if (!opts.skipSlider) {
+        const min = parseFloat(speedSlider.min);
+        const max = parseFloat(speedSlider.max);
+        speedSlider.value = Math.min(max, Math.max(min, s));
+    }
+    if (opts.save) localStorage.setItem('ttsSpeed', String(s));
+}
 
 speedSlider.addEventListener('input', () => {
-    const speed = parseFloat(speedSlider.value);
-    speedValue.textContent = speed.toFixed(1) + '×';
-    audioPlayer.playbackRate = speed;
+    applySpeed(parseFloat(speedSlider.value), { save: true, skipSlider: true });
 });
+
+function commitSpeedInput() {
+    const v = parseFloat(speedInput.value);
+    applySpeed(isFinite(v) ? v : currentSpeed, { save: true });
+}
+speedInput.addEventListener('change', commitSpeedInput);
+speedInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commitSpeedInput(); speedInput.blur(); }
+});
+
+// --- Speed presets ---
+let speedPresets = [];
+try { speedPresets = JSON.parse(localStorage.getItem('ttsSpeedPresets')) || []; } catch (err) { speedPresets = []; }
+if (!Array.isArray(speedPresets) || speedPresets.length === 0) speedPresets = [1, 1.25, 1.5];
+speedPresets = speedPresets
+    .filter(n => typeof n === 'number' && isFinite(n) && n >= SPEED_MIN && n <= SPEED_MAX)
+    .map(n => Math.round(n * 100) / 100)
+    .slice(0, 6);
+if (speedPresets.length === 0) speedPresets = [1, 1.25, 1.5];
+
+function savePresets() {
+    localStorage.setItem('ttsSpeedPresets', JSON.stringify(speedPresets));
+}
+
+function renderPresets() {
+    presetChips.innerHTML = '';
+    speedPresets.forEach((val, i) => {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+
+        const applyBtn = document.createElement('button');
+        applyBtn.className = 'chip-apply';
+        applyBtn.textContent = val.toFixed(2) + '×';
+        applyBtn.title = 'Apply this speed';
+        applyBtn.addEventListener('click', () => applySpeed(val, { save: true }));
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'chip-del';
+        delBtn.textContent = '✕';
+        delBtn.title = 'Remove preset';
+        delBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            speedPresets.splice(i, 1);
+            if (speedPresets.length === 0) speedPresets = [1, 1.25, 1.5];
+            savePresets();
+            renderPresets();
+        });
+
+        chip.appendChild(applyBtn);
+        chip.appendChild(delBtn);
+        presetChips.appendChild(chip);
+    });
+}
+
+document.getElementById('savePresetBtn').addEventListener('click', () => {
+    if (speedPresets.some(p => Math.abs(p - currentSpeed) < 0.001)) return;
+    speedPresets.push(currentSpeed);
+    if (speedPresets.length > 6) speedPresets.shift();
+    savePresets();
+    renderPresets();
+});
+
 audioPlayer.preservesPitch = true;
+if ('mozPreservesPitch' in audioPlayer) audioPlayer.mozPreservesPitch = true;
+applySpeed(currentSpeed, { save: false });
+renderPresets();
+
+// ==========================================
+// 6. AUDIO CONTROLS
+// ==========================================
+function skipSecs() {
+    const v = parseFloat(document.getElementById('skipSeconds').value);
+    return isFinite(v) && v > 0 ? v : 10;
+}
+
+function seekTo(newTime) {
+    if (!isFinite(audioPlayer.duration)) return;
+    audioPlayer.currentTime = Math.min(Math.max(0, newTime), Math.max(0, audioPlayer.duration - 0.05));
+    refreshHighlight(true);
+}
 
 document.getElementById('skipBack').addEventListener('click', () => {
-    audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - (parseFloat(document.getElementById('skipSeconds').value) || 10));
+    seekTo(audioPlayer.currentTime - skipSecs());
 });
 document.getElementById('skipForward').addEventListener('click', () => {
-    audioPlayer.currentTime = Math.min(audioPlayer.duration || 9999, audioPlayer.currentTime + (parseFloat(document.getElementById('skipSeconds').value) || 10));
+    seekTo(audioPlayer.currentTime + skipSecs());
 });
 
 let currentTextSize = parseInt(localStorage.getItem('ttsTextSize')) || 22; 
@@ -309,49 +450,193 @@ document.getElementById('textSizeUp').addEventListener('click', () => { currentT
 document.getElementById('textSizeDown').addEventListener('click', () => { currentTextSize = Math.max(16, currentTextSize - 2); applyTextSize(); });
 
 document.getElementById('newBtn').addEventListener('click', () => {
+    cancelAnimationFrame(rafId);
     audioPlayer.pause();
-    audioPlayer.src = '';
+    if (currentAudioUrl) { URL.revokeObjectURL(currentAudioUrl); currentAudioUrl = null; }
+    audioPlayer.removeAttribute('src');
+    audioPlayer.load();
+    chunkTimings = [];
+    totalNominalDuration = 0;
+    lineDivs = [];
+    lastActiveLineEl = null;
+    isReaderVisible = false;
+    playHint.style.display = 'none';
+    readingContainer.innerHTML = '';
     readerSection.style.display = 'none';
     floatingControls.style.display = 'none';
     inputSection.style.display = 'flex';
 });
 
 // ==========================================
-// 5. RENDERING & HIGHLIGHTING (FIXED ENGINE)
+// 7. TIMELINE MAPPING & HIGHLIGHTING
 // ==========================================
-let lineDivs = [];
-let totalChars = 0;
-let animationFrameId;
+let lineDivs = [];            // { start, end, el }
+let chunkTimings = [];        // { startChar, endChar, startTime, duration, portions, totalWeight }
+let totalNominalDuration = 0;
+let lastActiveLineEl = null;
+let rafId = null;
 
+function getScale() {
+    const d = audioPlayer.duration;
+    if (isFinite(d) && d > 0.01 && totalNominalDuration > 0) return d / totalNominalDuration;
+    return 1;
+}
+
+function findChunkIndexByChar(c) {
+    let lo = 0, hi = chunkTimings.length - 1, idx = 0;
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (chunkTimings[mid].startChar <= c) { idx = mid; lo = mid + 1; }
+        else hi = mid - 1;
+    }
+    return idx;
+}
+
+function timeToCharIndex(time) {
+    if (!chunkTimings.length) return 0;
+    const scale = getScale();
+    const t = Math.max(0, time / scale);
+    const last = chunkTimings[chunkTimings.length - 1];
+    if (t >= last.startTime + last.duration) return last.endChar;
+
+    let lo = 0, hi = chunkTimings.length - 1, idx = 0;
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (chunkTimings[mid].startTime <= t) { idx = mid; lo = mid + 1; }
+        else hi = mid - 1;
+    }
+    const ch = chunkTimings[idx];
+    let f = ch.duration > 0 ? (t - ch.startTime) / ch.duration : 0;
+    f = Math.min(1, Math.max(0, f));
+
+    if (!ch.portions || !ch.portions.length) {
+        return ch.startChar + f * (ch.endChar - ch.startChar);
+    }
+
+    const target = f * ch.totalWeight;
+    for (let i = 0; i < ch.portions.length; i++) {
+        const p = ch.portions[i];
+        if (target <= p.cumW || i === ch.portions.length - 1) {
+            const startW = p.cumW - p.w;
+            const localF = p.w > 0 ? (target - startW) / p.w : 0;
+            const lf = Math.min(1, Math.max(0, localF));
+            return p.s + lf * (p.e - p.s);
+        }
+    }
+    return ch.endChar;
+}
+
+function charIndexToTime(charIdx) {
+    if (!chunkTimings.length) return 0;
+    const scale = getScale();
+
+    let idx = chunkTimings.length - 1;
+    for (let i = 0; i < chunkTimings.length; i++) {
+        if (charIdx < chunkTimings[i].endChar) { idx = i; break; }
+    }
+    const ch = chunkTimings[idx];
+
+    if (!ch.portions || !ch.portions.length) {
+        const span = ch.endChar - ch.startChar;
+        const f = span > 0 ? Math.min(1, Math.max(0, (charIdx - ch.startChar) / span)) : 0;
+        return (ch.startTime + f * ch.duration) * scale;
+    }
+
+    let f = 1;
+    for (let i = 0; i < ch.portions.length; i++) {
+        const p = ch.portions[i];
+        if (charIdx < p.e || i === ch.portions.length - 1) {
+            const chars = p.e - p.s;
+            const lf = chars > 0 ? Math.min(1, Math.max(0, (charIdx - p.s) / chars)) : 0;
+            const startW = p.cumW - p.w;
+            f = ch.totalWeight > 0 ? (startW + lf * p.w) / ch.totalWeight : 0;
+            break;
+        }
+    }
+    f = Math.min(1, Math.max(0, f));
+    return (ch.startTime + f * ch.duration) * scale;
+}
+
+function lineIndexForChar(c) {
+    let lo = 0, hi = lineDivs.length - 1, idx = 0;
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (lineDivs[mid].start <= c) { idx = mid; lo = mid + 1; }
+        else hi = mid - 1;
+    }
+    return idx;
+}
+
+function autoScrollTo(el) {
+    const cTop = readingContainer.scrollTop;
+    const cH = readingContainer.clientHeight;
+    const eTop = el.offsetTop;
+    const eH = el.offsetHeight;
+    if (eTop < cTop + cH * 0.15 || eTop + eH > cTop + cH * 0.70) {
+        readingContainer.scrollTo({ top: Math.max(0, eTop - cH * 0.35), behavior: 'smooth' });
+    }
+}
+
+function refreshHighlight(scroll) {
+    if (!isReaderVisible || !chunkTimings.length || !lineDivs.length) return;
+    const charIdx = timeToCharIndex(audioPlayer.currentTime || 0);
+    const idx = lineIndexForChar(charIdx);
+    const el = lineDivs[idx].el;
+    if (el !== lastActiveLineEl) {
+        if (lastActiveLineEl) lastActiveLineEl.classList.remove('active');
+        el.classList.add('active');
+        lastActiveLineEl = el;
+        if (scroll !== false) autoScrollTo(el);
+    }
+}
+
+function startHighlightLoop() {
+    cancelAnimationFrame(rafId);
+    const loop = () => {
+        refreshHighlight(true);
+        rafId = requestAnimationFrame(loop);
+    };
+    rafId = requestAnimationFrame(loop);
+}
+
+audioPlayer.addEventListener('play', () => {
+    playHint.style.display = 'none';
+    startHighlightLoop();
+});
+audioPlayer.addEventListener('pause', () => {
+    cancelAnimationFrame(rafId);
+    refreshHighlight(true);
+});
+audioPlayer.addEventListener('timeupdate', () => {
+    if (!audioPlayer.paused) refreshHighlight(true);
+});
+audioPlayer.addEventListener('seeked', () => refreshHighlight(true));
+audioPlayer.addEventListener('loadedmetadata', () => refreshHighlight(true));
+
+// ==========================================
+// 8. RENDERING
+// ==========================================
 function renderTextForHighlighting(text) {
     readingContainer.innerHTML = '';
     lineDivs = [];
+    lastActiveLineEl = null;
     
-    // Split by newline. Keep all lines to ensure accurate character mapping.
     const lines = text.split('\n');
     let currentCharIndex = 0;
     
     lines.forEach((lineText) => {
         const div = document.createElement('div');
         div.className = 'line';
-        
-        // Use a non-breaking space for empty lines to keep the layout intact
         div.textContent = lineText.trim() !== '' ? lineText : '\u00A0'; 
         
         const thisLineStart = currentCharIndex;
         const lineLength = lineText.length;
 
-        // Click to Seek
         div.addEventListener('click', () => {
-            if (!audioPlayer.duration) return;
-            // Calculate percentage based on where this line starts in the text
-            const percent = thisLineStart / text.length;
-            audioPlayer.currentTime = audioPlayer.duration * percent;
-            
-            lineDivs.forEach(ld => ld.classList.remove('active'));
-            div.classList.add('active');
-            
-            if (audioPlayer.paused) audioPlayer.play();
+            if (!chunkTimings.length || !isFinite(audioPlayer.duration)) return;
+            const t = charIndexToTime(thisLineStart);
+            seekTo(t);
+            if (audioPlayer.paused) audioPlayer.play().catch(() => {});
         });
 
         readingContainer.appendChild(div);
@@ -362,49 +647,45 @@ function renderTextForHighlighting(text) {
             el: div 
         });
         
-        // +1 for the newline character
         currentCharIndex += lineLength + 1; 
     });
-    totalChars = text.length;
 }
 
-function updateHighlight() {
-    if (!audioPlayer.paused && audioPlayer.duration) {
-        const progress = audioPlayer.currentTime / audioPlayer.duration;
-        const currentChar = progress * totalChars;
-        
-        let activeDiv = null;
-        
-        for (let i = 0; i < lineDivs.length; i++) {
-            const ld = lineDivs[i];
-            if (currentChar >= ld.start && currentChar < ld.end) {
-                activeDiv = ld.el;
-                break;
-            }
+// Build line-weighted portions inside every chunk (needs lineDivs + chunkTimings)
+function buildPortions() {
+    for (const ch of chunkTimings) {
+        ch.portions = [];
+        ch.totalWeight = 0;
+    }
+    for (const line of lineDivs) {
+        if (line.end <= line.start) {
+            const ci = findChunkIndexByChar(line.start);
+            chunkTimings[ci].portions.push({ s: line.start, e: line.start, w: 20, cumW: 0 });
+            continue;
         }
-
-        if (activeDiv && !activeDiv.classList.contains('active')) {
-            lineDivs.forEach(ld => ld.el.classList.remove('active'));
-            activeDiv.classList.add('active');
-
-            // Scroll into view comfortably
-            const containerRect = readingContainer.getBoundingClientRect();
-            const divRect = activeDiv.getBoundingClientRect();
-            
-            if (divRect.top > containerRect.top + (containerRect.height * 0.35) || divRect.bottom < containerRect.top + (containerRect.height * 0.15)) {
-                const offset = activeDiv.offsetTop - (readingContainer.clientHeight * 0.30);
-                readingContainer.scrollTo({ top: offset, behavior: 'smooth' });
+        let cj = findChunkIndexByChar(line.start);
+        let cur = line.start;
+        while (cur < line.end && cj < chunkTimings.length) {
+            const ch = chunkTimings[cj];
+            const s = Math.max(cur, ch.startChar);
+            const e = Math.min(line.end, ch.endChar);
+            if (e > s) {
+                ch.portions.push({ s: s, e: e, w: (e - s) + 20, cumW: 0 });
             }
+            cur = e;
+            if (cur >= ch.endChar) cj++;
+            else break;
         }
     }
-    animationFrameId = requestAnimationFrame(updateHighlight);
+    for (const ch of chunkTimings) {
+        let cum = 0;
+        for (const p of ch.portions) { cum += p.w; p.cumW = cum; }
+        ch.totalWeight = cum;
+    }
 }
 
-audioPlayer.addEventListener('play', () => { cancelAnimationFrame(animationFrameId); updateHighlight(); });
-audioPlayer.addEventListener('pause', () => cancelAnimationFrame(animationFrameId));
-
 // ==========================================
-// 6. PREPROCESSOR
+// 9. PREPROCESSOR
 // ==========================================
 function preprocessText(raw) {
     let text = raw;
@@ -425,7 +706,7 @@ function preprocessText(raw) {
                 out.push(` [Table. Please refer to the original text.] `);
                 inTable = false;
             }
-            out.push(lines[i]); // Keep original spacing for line breaks
+            out.push(lines[i]); 
         }
     }
     if (inTable) out.push(` [Table. Please refer to the original text.] `);
@@ -434,7 +715,80 @@ function preprocessText(raw) {
 }
 
 // ==========================================
-// 7. GENERATE (BULLETPROOF CHUNKING)
+// 10. CHUNKING (LINE-ALIGNED)
+// ==========================================
+const CHUNK_MAX = 600;
+
+function buildChunks(text, maxLen) {
+    const n = text.length;
+    const ranges = [];
+    let start = 0;
+
+    while (start < n) {
+        let end = Math.min(start + maxLen, n);
+        if (end < n) {
+            const minBreak = start + Math.floor(maxLen * 0.4);
+            const nl = text.lastIndexOf('\n', end - 1);
+            if (nl >= minBreak) {
+                end = nl + 1;
+            } else {
+                const sp = text.lastIndexOf(' ', end - 1);
+                if (sp >= minBreak) end = sp + 1;
+            }
+        }
+        ranges.push([start, end]);
+        start = end;
+    }
+
+    const cleaned = [];
+    for (let i = 0; i < ranges.length; i++) {
+        const s = ranges[i][0], e = ranges[i][1];
+        const hasContent = text.slice(s, e).trim().length > 0;
+        if (hasContent) {
+            if (cleaned.length && text.slice(cleaned[cleaned.length - 1][0], cleaned[cleaned.length - 1][1]).trim().length === 0) {
+                cleaned[cleaned.length - 1][1] = e;
+            } else {
+                cleaned.push([s, e]);
+            }
+        } else {
+            if (cleaned.length) cleaned[cleaned.length - 1][1] = e;
+            else cleaned.push([s, e]);
+        }
+    }
+
+    return cleaned.map(r => ({ start: r[0], end: r[1], text: text.slice(r[0], r[1]) }));
+}
+
+// ==========================================
+// 11. AUDIO DURATION MEASUREMENT
+// ==========================================
+function measureAudioDuration(blob) {
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('audio');
+        let settled = false;
+
+        const finish = (d) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            try { a.removeAttribute('src'); a.load(); } catch (err) {}
+            URL.revokeObjectURL(url);
+            resolve(d);
+        };
+
+        const timer = setTimeout(() => finish(null), 8000);
+        a.preload = 'metadata';
+        a.onloadedmetadata = () => {
+            finish(isFinite(a.duration) && a.duration > 0 ? a.duration : null);
+        };
+        a.onerror = () => finish(null);
+        a.src = url;
+    });
+}
+
+// ==========================================
+// 12. GENERATE (CHUNKING + TIMELINE BUILD)
 // ==========================================
 generateBtn.addEventListener('click', async () => {
     const statusEl = document.getElementById('status');
@@ -455,23 +809,7 @@ generateBtn.addEventListener('click', async () => {
 
     const processedText = preprocessText(rawText);
     const voice = document.getElementById('voiceSelect').value;
-    
-    // Bulletproof Chunking (Max 800 chars to prevent Cloudflare 500 errors)
-    const chunks = [];
-    let remaining = processedText;
-    
-    while (remaining.length > 0) {
-        if (remaining.length <= 800) {
-            chunks.push(remaining);
-            break;
-        }
-        // Find the last space within 800 chars to avoid cutting words in half
-        let splitIndex = remaining.lastIndexOf(' ', 800);
-        if (splitIndex === -1) splitIndex = 800; 
-        
-        chunks.push(remaining.slice(0, splitIndex));
-        remaining = remaining.slice(splitIndex).trim();
-    }
+    const chunks = buildChunks(processedText, CHUNK_MAX);
 
     generateBtn.disabled = true;
     statusEl.style.color = '#3b82f6';
@@ -489,7 +827,7 @@ generateBtn.addEventListener('click', async () => {
                     'Content-Type': 'application/json' 
                 },
                 body: JSON.stringify({ 
-                    input: chunks[i], 
+                    input: chunks[i].text, 
                     voice: voice, 
                     speed: 1.0, 
                     stream: false 
@@ -504,18 +842,61 @@ generateBtn.addEventListener('click', async () => {
             audioBlobs.push(blob);
         }
 
+        statusEl.textContent = `⏳ Syncing timeline...`;
+        const durations = [];
+        for (let i = 0; i < audioBlobs.length; i++) {
+            durations.push(await measureAudioDuration(audioBlobs[i]));
+        }
+
+        // Fallback estimate for any blob whose duration could not be read
+        let knownChars = 0;
+        let knownDur = 0;
+        for (let i = 0; i < chunks.length; i++) {
+            if (durations[i] && durations[i] > 0) {
+                knownChars += chunks[i].text.length;
+                knownDur += durations[i];
+            }
+        }
+        const charsPerSec = knownDur > 0 ? (knownChars / knownDur) : 15;
+        const finalDurs = durations.map((d, i) => (d && d > 0) ? d : (chunks[i].text.length / Math.max(1, charsPerSec)));
+
+        chunkTimings = [];
+        let tAcc = 0;
+        for (let i = 0; i < chunks.length; i++) {
+            chunkTimings.push({
+                startChar: chunks[i].start,
+                endChar: chunks[i].end,
+                startTime: tAcc,
+                duration: finalDurs[i],
+                portions: [],
+                totalWeight: 0
+            });
+            tAcc += finalDurs[i];
+        }
+        totalNominalDuration = tAcc;
+
         const combinedBlob = new Blob(audioBlobs, { type: 'audio/mpeg' });
-        audioPlayer.src = URL.createObjectURL(combinedBlob);
-        
-        // Render the text that was sent to the API
+        if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
+        currentAudioUrl = URL.createObjectURL(combinedBlob);
+        audioPlayer.src = currentAudioUrl;
+
         renderTextForHighlighting(processedText);
-        
+        buildPortions();
+        readingContainer.scrollTop = 0;
+
         inputSection.style.display = 'none';
         readerSection.style.display = 'flex';
         floatingControls.style.display = 'flex';
-        
-        audioPlayer.playbackRate = parseFloat(speedSlider.value);
-        audioPlayer.play();
+        isReaderVisible = true;
+        playHint.style.display = 'none';
+        lastActiveLineEl = null;
+
+        applySpeed(currentSpeed, { save: false });
+        refreshHighlight(true);
+
+        audioPlayer.play().catch(() => {
+            playHint.style.display = 'inline-block';
+        });
         
         statusEl.textContent = '';
         generateBtn.disabled = false;
